@@ -973,8 +973,18 @@ namespace OsEngine.Market.Connectors
                     return;
                 }
 
+                if (SourcesCreator == null)
+                {
+                    return;
+                }
+
                 if (SourcesCreator.StartProgram != StartProgram.IsOsOptimizer
                      && SourcesCreator.StartProgram != StartProgram.IsTester)
+                {
+                    return;
+                }
+
+                if (CheckBoxSaveTradeArrayInCandle == null)
                 {
                     return;
                 }
@@ -992,7 +1002,8 @@ namespace OsEngine.Market.Connectors
 
                     TimeFrame currentTf;
 
-                    if (Enum.TryParse(row.Cells[1].Value.ToString(), out currentTf) == false)
+                    if (row.Cells[1].Value == null
+                        || Enum.TryParse(row.Cells[1].Value.ToString(), out currentTf) == false)
                     {
                         continue;
                     }
