@@ -95,6 +95,7 @@ namespace OsEngine.OsTrader.Panels.Tab
         {
             _valuesToFormula = new List<ValueSave>();
             _chartMaster.Clear();
+            _usdIndexStates.Clear();
         }
 
         /// <summary>
@@ -109,6 +110,7 @@ namespace OsEngine.OsTrader.Panels.Tab
 
             _chartMaster.Delete();
             _chartMaster = null;
+            _usdIndexStates.Clear();
 
             if (File.Exists(@"Engine\" + TabName + @"SpreadSet.txt"))
             {
@@ -573,6 +575,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 return;
             }
+            _usdIndexStates.Remove(Tabs[index].UniqueName);
             Tabs[index].NewCandlesChangeEvent -= BotTabIndex_NewCandlesChangeEvent;
             Tabs[index].LogMessageEvent -= SendNewLogMessage;
             Tabs[index].Delete();
@@ -606,6 +609,11 @@ namespace OsEngine.OsTrader.Panels.Tab
                     writer.WriteLine(EventsIsOn);
                     writer.WriteLine(CalculationDepth);
                     writer.WriteLine(PercentNormalization);
+                    writer.WriteLine(CalculationType);
+                    writer.WriteLine(EwmaLambda);
+                    writer.WriteLine(SigmaMin);
+                    writer.WriteLine(FreshnessBars);
+                    writer.WriteLine(StartIndexValue);
                     writer.Close();
                 }
             }
@@ -656,6 +664,31 @@ namespace OsEngine.OsTrader.Panels.Tab
                         _eventsIsOn = Convert.ToBoolean(reader.ReadLine());
                         CalculationDepth = Convert.ToInt32(reader.ReadLine());
                         PercentNormalization = Convert.ToBoolean(reader.ReadLine());
+
+                        if (reader.EndOfStream == false)
+                        {
+                            Enum.TryParse(reader.ReadLine(), out _calculationType);
+                        }
+
+                        if (reader.EndOfStream == false)
+                        {
+                            _ewmaLambda = Convert.ToDecimal(reader.ReadLine());
+                        }
+
+                        if (reader.EndOfStream == false)
+                        {
+                            _sigmaMin = Convert.ToDecimal(reader.ReadLine());
+                        }
+
+                        if (reader.EndOfStream == false)
+                        {
+                            _freshnessBars = Convert.ToInt32(reader.ReadLine());
+                        }
+
+                        if (reader.EndOfStream == false)
+                        {
+                            _startIndexValue = Convert.ToDecimal(reader.ReadLine());
+                        }
                     }
                     else
                     {
@@ -676,6 +709,26 @@ namespace OsEngine.OsTrader.Panels.Tab
             if (CalculationDepth == 0)
             {
                 CalculationDepth = 1000;
+            }
+
+            if (_ewmaLambda <= 0 || _ewmaLambda >= 1)
+            {
+                _ewmaLambda = 0.94m;
+            }
+
+            if (_sigmaMin <= 0)
+            {
+                _sigmaMin = 0.0001m;
+            }
+
+            if (_freshnessBars < 0)
+            {
+                _freshnessBars = 1;
+            }
+
+            if (_startIndexValue <= 0)
+            {
+                _startIndexValue = 100m;
             }
 
             _isLoaded = false;
@@ -715,6 +768,120 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
         }
         private string _userFormula;
+
+        public IndexCalculationType CalculationType
+        {
+            get => _calculationType;
+            set
+            {
+                if (_calculationType == value)
+                {
+                    return;
+                }
+
+                _calculationType = value;
+                Save();
+                FullRecalculateIndex();
+            }
+        }
+
+        private IndexCalculationType _calculationType = IndexCalculationType.Formula;
+
+        public decimal EwmaLambda
+        {
+            get => _ewmaLambda;
+            set
+            {
+                if (value <= 0 || value >= 1)
+                {
+                    return;
+                }
+                if (_ewmaLambda == value)
+                {
+                    return;
+                }
+                _ewmaLambda = value;
+                Save();
+                if (CalculationType == IndexCalculationType.UsdStrength)
+                {
+                    FullRecalculateIndex();
+                }
+            }
+        }
+
+        private decimal _ewmaLambda = 0.94m;
+
+        public decimal SigmaMin
+        {
+            get => _sigmaMin;
+            set
+            {
+                if (value <= 0)
+                {
+                    return;
+                }
+                if (_sigmaMin == value)
+                {
+                    return;
+                }
+                _sigmaMin = value;
+                Save();
+                if (CalculationType == IndexCalculationType.UsdStrength)
+                {
+                    FullRecalculateIndex();
+                }
+            }
+        }
+
+        private decimal _sigmaMin = 0.0001m;
+
+        public int FreshnessBars
+        {
+            get => _freshnessBars;
+            set
+            {
+                if (value < 0)
+                {
+                    return;
+                }
+                if (_freshnessBars == value)
+                {
+                    return;
+                }
+                _freshnessBars = value;
+                Save();
+                if (CalculationType == IndexCalculationType.UsdStrength)
+                {
+                    FullRecalculateIndex();
+                }
+            }
+        }
+
+        private int _freshnessBars = 1;
+
+        public decimal StartIndexValue
+        {
+            get => _startIndexValue;
+            set
+            {
+                if (value <= 0)
+                {
+                    return;
+                }
+                if (_startIndexValue == value)
+                {
+                    return;
+                }
+                _startIndexValue = value;
+                Save();
+                if (CalculationType == IndexCalculationType.UsdStrength)
+                {
+                    FullRecalculateIndex();
+                }
+            }
+        }
+
+        private decimal _startIndexValue = 100m;
 
         public List<Security> SecuritiesInIndex = new List<Security>();
 
@@ -808,7 +975,10 @@ namespace OsEngine.OsTrader.Panels.Tab
         public void RebuildHard()
         {
             _normalizeCandles.Clear();
-            AutoFormulaBuilder.RebuildHard();
+            if (CalculationType == IndexCalculationType.Formula)
+            {
+                AutoFormulaBuilder.RebuildHard();
+            }
 
             if (_lastRecalculateTime.AddSeconds(1) < DateTime.Now)
             {
@@ -829,6 +999,12 @@ namespace OsEngine.OsTrader.Panels.Tab
 
             if (Tabs == null || Tabs.Count == 0)
             {
+                return;
+            }
+
+            if (CalculationType == IndexCalculationType.UsdStrength)
+            {
+                FullRecalculateUsdStrength();
                 return;
             }
 
@@ -907,19 +1083,28 @@ namespace OsEngine.OsTrader.Panels.Tab
 
             DateTime timeCandle = candles[candles.Count - 1].TimeStart;
 
-            for (int i = 0; i < Tabs.Count; i++)
+            if (CalculationType == IndexCalculationType.Formula)
             {
-                List<Candle> myCandles = Tabs[i].Candles(true);
-
-                if (myCandles == null || myCandles.Count < 10)
+                for (int i = 0; i < Tabs.Count; i++)
                 {
-                    return;
-                }
+                    List<Candle> myCandles = Tabs[i].Candles(true);
 
-                if (timeCandle != myCandles[myCandles.Count - 1].TimeStart)
-                {
-                    return;
+                    if (myCandles == null || myCandles.Count < 10)
+                    {
+                        return;
+                    }
+
+                    if (timeCandle != myCandles[myCandles.Count - 1].TimeStart)
+                    {
+                        return;
+                    }
                 }
+            }
+
+            if (CalculationType == IndexCalculationType.UsdStrength)
+            {
+                CalculateUsdStrengthForLastCandle();
+                return;
             }
 
             if (AutoFormulaBuilder.TryRebuidFormula(timeCandle, false))
@@ -2011,6 +2196,367 @@ namespace OsEngine.OsTrader.Panels.Tab
         /// index change event
         /// </summary>
         public event Action<List<Candle>> SpreadChangeEvent;
+
+        #endregion
+
+        #region USD Strength Index
+
+        private readonly Dictionary<string, UsdIndexComponentState> _usdIndexStates = new Dictionary<string, UsdIndexComponentState>();
+
+        private void FullRecalculateUsdStrength()
+        {
+            _usdIndexStates.Clear();
+            Candles = new List<Candle>();
+            _chartMaster.Clear();
+
+            if (Tabs == null || Tabs.Count == 0)
+            {
+                return;
+            }
+
+            List<List<Candle>> candlesByTab = new List<List<Candle>>();
+
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                List<Candle> tabCandles = Tabs[i].Candles(true);
+
+                if (tabCandles == null || tabCandles.Count < 2)
+                {
+                    candlesByTab.Add(null);
+                    continue;
+                }
+
+                if (tabCandles.Count > CalculationDepth)
+                {
+                    tabCandles = tabCandles.GetRange(tabCandles.Count - CalculationDepth, CalculationDepth);
+                }
+
+                candlesByTab.Add(tabCandles);
+            }
+
+            if (candlesByTab.Count == 0 || candlesByTab[0] == null)
+            {
+                return;
+            }
+
+            List<Candle> reference = candlesByTab[0];
+            int[] positions = new int[Tabs.Count];
+            decimal indexValue = StartIndexValue;
+
+            for (int i = 1; i < reference.Count; i++)
+            {
+                DateTime time = reference[i].TimeStart;
+                double weightedReturn = 0;
+                double weightSum = 0;
+
+                for (int j = 0; j < Tabs.Count; j++)
+                {
+                    List<Candle> series = candlesByTab[j];
+
+                    if (series == null || series.Count < 2)
+                    {
+                        continue;
+                    }
+
+                    int pos = positions[j];
+
+                    while (pos < series.Count && series[pos].TimeStart < time)
+                    {
+                        pos++;
+                    }
+
+                    positions[j] = pos;
+
+                    if (pos >= series.Count || series[pos].TimeStart != time || pos < 1)
+                    {
+                        continue;
+                    }
+
+                    decimal previous = series[pos - 1].Close;
+                    decimal current = series[pos].Close;
+
+                    if (previous <= 0 || current <= 0)
+                    {
+                        continue;
+                    }
+
+                    double returnValue = Math.Log((double)(current / previous));
+                    UsdIndexComponentState state = GetUsdIndexState(Tabs[j]);
+                    state.Sigma2 = UpdateEwmaVariance(state.Sigma2, returnValue);
+
+                    double sigma = Math.Sqrt(state.Sigma2);
+                    double weight = 1d / Math.Max(sigma, (double)SigmaMin);
+
+                    weightSum += weight;
+                    weightedReturn += weight * returnValue;
+                }
+
+                if (weightSum == 0)
+                {
+                    continue;
+                }
+
+                double indexReturn = weightedReturn / weightSum;
+                decimal previousIndex = indexValue;
+                indexValue = previousIndex * (decimal)Math.Exp(indexReturn);
+
+                Candle candle = new Candle
+                {
+                    TimeStart = time,
+                    Open = previousIndex,
+                    Close = indexValue
+                };
+
+                candle.High = Math.Max(candle.Open, candle.Close);
+                candle.Low = Math.Min(candle.Open, candle.Close);
+
+                Candles.Add(candle);
+            }
+
+            if (Candles.Count > CalculationDepth)
+            {
+                Candles = Candles.GetRange(Candles.Count - CalculationDepth, CalculationDepth);
+            }
+
+            _chartMaster.SetCandles(Candles);
+
+            if (SpreadChangeEvent != null && EventsIsOn)
+            {
+                SpreadChangeEvent(Candles);
+            }
+        }
+
+        private void CalculateUsdStrengthForLastCandle()
+        {
+            if (Tabs == null || Tabs.Count == 0)
+            {
+                return;
+            }
+
+            DateTime maxTime = DateTime.MinValue;
+
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                List<Candle> tabCandles = Tabs[i].Candles(true);
+
+                if (tabCandles == null || tabCandles.Count == 0)
+                {
+                    continue;
+                }
+
+                DateTime lastTime = tabCandles[tabCandles.Count - 1].TimeStart;
+
+                if (lastTime > maxTime)
+                {
+                    maxTime = lastTime;
+                }
+            }
+
+            if (maxTime == DateTime.MinValue)
+            {
+                return;
+            }
+
+            double weightedReturn = 0;
+            double weightSum = 0;
+
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                ConnectorCandles tab = Tabs[i];
+                List<Candle> tabCandles = tab.Candles(true);
+
+                if (tabCandles == null || tabCandles.Count < 2)
+                {
+                    continue;
+                }
+
+                DateTime lastTime = tabCandles[tabCandles.Count - 1].TimeStart;
+                TimeSpan timeFrameSpan = GetTimeFrameSpan(tab.TimeFrame);
+
+                if (FreshnessBars > 0 && maxTime - lastTime > TimeSpan.FromTicks(timeFrameSpan.Ticks * FreshnessBars))
+                {
+                    continue;
+                }
+
+                decimal previous = tabCandles[tabCandles.Count - 2].Close;
+                decimal current = tabCandles[tabCandles.Count - 1].Close;
+
+                if (previous <= 0 || current <= 0)
+                {
+                    continue;
+                }
+
+                double returnValue = Math.Log((double)(current / previous));
+                UsdIndexComponentState state = GetUsdIndexState(tab);
+                state.Sigma2 = UpdateEwmaVariance(state.Sigma2, returnValue);
+                state.LastCandleTime = lastTime;
+
+                double sigma = Math.Sqrt(state.Sigma2);
+                double weight = 1d / Math.Max(sigma, (double)SigmaMin);
+
+                weightSum += weight;
+                weightedReturn += weight * returnValue;
+            }
+
+            if (weightSum == 0)
+            {
+                return;
+            }
+
+            if (Candles == null)
+            {
+                Candles = new List<Candle>();
+            }
+
+            double indexReturn = weightedReturn / weightSum;
+
+            if (Candles.Count > 0 && Candles[Candles.Count - 1].TimeStart == maxTime)
+            {
+                Candle last = Candles[Candles.Count - 1];
+                decimal baseIndex = last.Open;
+                decimal indexValue = baseIndex * (decimal)Math.Exp(indexReturn);
+                last.Close = indexValue;
+                last.High = Math.Max(last.Open, last.Close);
+                last.Low = Math.Min(last.Open, last.Close);
+            }
+            else
+            {
+                decimal previousIndex = Candles.Count > 0 ? Candles[Candles.Count - 1].Close : StartIndexValue;
+                decimal indexValue = previousIndex * (decimal)Math.Exp(indexReturn);
+
+                Candle candle = new Candle
+                {
+                    TimeStart = maxTime,
+                    Open = previousIndex,
+                    Close = indexValue
+                };
+
+                candle.High = Math.Max(candle.Open, candle.Close);
+                candle.Low = Math.Min(candle.Open, candle.Close);
+
+                Candles.Add(candle);
+
+                while (Candles.Count > CalculationDepth)
+                {
+                    Candles.RemoveAt(0);
+                }
+            }
+
+            _chartMaster.SetCandles(Candles);
+
+            if (SpreadChangeEvent != null && EventsIsOn)
+            {
+                SpreadChangeEvent(Candles);
+            }
+        }
+
+        private UsdIndexComponentState GetUsdIndexState(ConnectorCandles tab)
+        {
+            if (_usdIndexStates.TryGetValue(tab.UniqueName, out UsdIndexComponentState state))
+            {
+                return state;
+            }
+
+            state = new UsdIndexComponentState(tab.UniqueName);
+            _usdIndexStates.Add(tab.UniqueName, state);
+            return state;
+        }
+
+        private double UpdateEwmaVariance(double currentVariance, double returnValue)
+        {
+            double lambda = (double)EwmaLambda;
+            return (lambda * currentVariance) + ((1d - lambda) * returnValue * returnValue);
+        }
+
+        private static TimeSpan GetTimeFrameSpan(TimeFrame frame)
+        {
+            if (frame == TimeFrame.Day)
+            {
+                return new TimeSpan(1, 0, 0, 0);
+            }
+            if (frame == TimeFrame.Hour1)
+            {
+                return new TimeSpan(0, 1, 0, 0);
+            }
+            if (frame == TimeFrame.Hour2)
+            {
+                return new TimeSpan(0, 2, 0, 0);
+            }
+            if (frame == TimeFrame.Hour4)
+            {
+                return new TimeSpan(0, 4, 0, 0);
+            }
+            if (frame == TimeFrame.Min1)
+            {
+                return new TimeSpan(0, 0, 1, 0);
+            }
+            if (frame == TimeFrame.Min10)
+            {
+                return new TimeSpan(0, 0, 10, 0);
+            }
+            if (frame == TimeFrame.Min15)
+            {
+                return new TimeSpan(0, 0, 15, 0);
+            }
+            if (frame == TimeFrame.Min2)
+            {
+                return new TimeSpan(0, 0, 2, 0);
+            }
+            if (frame == TimeFrame.Min20)
+            {
+                return new TimeSpan(0, 0, 20, 0);
+            }
+            if (frame == TimeFrame.Min30)
+            {
+                return new TimeSpan(0, 0, 30, 0);
+            }
+            if (frame == TimeFrame.Min5)
+            {
+                return new TimeSpan(0, 0, 5, 0);
+            }
+            if (frame == TimeFrame.Sec1)
+            {
+                return new TimeSpan(0, 0, 0, 1);
+            }
+            if (frame == TimeFrame.Sec10)
+            {
+                return new TimeSpan(0, 0, 0, 10);
+            }
+            if (frame == TimeFrame.Sec15)
+            {
+                return new TimeSpan(0, 0, 0, 15);
+            }
+            if (frame == TimeFrame.Sec2)
+            {
+                return new TimeSpan(0, 0, 0, 2);
+            }
+            if (frame == TimeFrame.Sec20)
+            {
+                return new TimeSpan(0, 0, 0, 20);
+            }
+            if (frame == TimeFrame.Sec30)
+            {
+                return new TimeSpan(0, 0, 0, 30);
+            }
+            if (frame == TimeFrame.Sec5)
+            {
+                return new TimeSpan(0, 0, 0, 5);
+            }
+
+            return new TimeSpan(0, 0, 1, 0);
+        }
+
+        private class UsdIndexComponentState
+        {
+            public UsdIndexComponentState(string name)
+            {
+                Name = name;
+            }
+
+            public string Name;
+            public double Sigma2;
+            public DateTime LastCandleTime;
+        }
 
         #endregion
 
@@ -3240,6 +3786,15 @@ namespace OsEngine.OsTrader.Panels.Tab
         EqualWeighted,
 
         Cointegration
+    }
+
+    /// <summary>
+    /// index calculation type
+    /// </summary>
+    public enum IndexCalculationType
+    {
+        Formula,
+        UsdStrength
     }
 
     /// <summary>

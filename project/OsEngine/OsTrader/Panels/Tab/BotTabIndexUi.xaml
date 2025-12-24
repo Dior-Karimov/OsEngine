@@ -68,6 +68,24 @@
                 </Grid>
 
             </TabItem>
+            <TabItem Name="TabControlItem3" Header="Index settings">
+                <Grid>
+                    <Label Name="LabelIndexCalculationType" Content="Index calculation" HorizontalAlignment="Left" Margin="10,20,0,0" VerticalAlignment="Top" Width="160"/>
+                    <ComboBox Name="ComboBoxIndexCalculationType" HorizontalAlignment="Left" Margin="180,20,0,0" VerticalAlignment="Top" Width="180" Height="23"/>
+
+                    <Label Name="LabelEwmaLambda" Content="EWMA Lambda" HorizontalAlignment="Left" Margin="10,60,0,0" VerticalAlignment="Top" Width="160"/>
+                    <TextBox Name="TextBoxEwmaLambda" HorizontalAlignment="Left" Margin="180,60,0,0" VerticalAlignment="Top" Width="180" Height="23"/>
+
+                    <Label Name="LabelSigmaMin" Content="Sigma Min" HorizontalAlignment="Left" Margin="10,100,0,0" VerticalAlignment="Top" Width="160"/>
+                    <TextBox Name="TextBoxSigmaMin" HorizontalAlignment="Left" Margin="180,100,0,0" VerticalAlignment="Top" Width="180" Height="23"/>
+
+                    <Label Name="LabelFreshnessBars" Content="Freshness bars" HorizontalAlignment="Left" Margin="10,140,0,0" VerticalAlignment="Top" Width="160"/>
+                    <TextBox Name="TextBoxFreshnessBars" HorizontalAlignment="Left" Margin="180,140,0,0" VerticalAlignment="Top" Width="180" Height="23"/>
+
+                    <Label Name="LabelStartIndexValue" Content="Start value" HorizontalAlignment="Left" Margin="10,180,0,0" VerticalAlignment="Top" Width="160"/>
+                    <TextBox Name="TextBoxStartIndexValue" HorizontalAlignment="Left" Margin="180,180,0,0" VerticalAlignment="Top" Width="180" Height="23"/>
+                </Grid>
+            </TabItem>
         </TabControl>
 
     </Grid>

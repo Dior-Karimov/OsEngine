@@ -101,6 +101,20 @@ namespace OsEngine.OsTrader.Panels.Tab
 
             CheckBoxPercentNormalization.IsChecked = spread.PercentNormalization;
 
+            ComboBoxIndexCalculationType.Items.Add(IndexCalculationType.Formula.ToString());
+            ComboBoxIndexCalculationType.Items.Add(IndexCalculationType.UsdStrength.ToString());
+            ComboBoxIndexCalculationType.SelectedItem = spread.CalculationType.ToString();
+            ComboBoxIndexCalculationType.SelectionChanged += ComboBoxIndexCalculationType_SelectionChanged;
+
+            TextBoxEwmaLambda.Text = spread.EwmaLambda.ToString();
+            TextBoxEwmaLambda.TextChanged += TextBoxEwmaLambda_TextChanged;
+            TextBoxSigmaMin.Text = spread.SigmaMin.ToString();
+            TextBoxSigmaMin.TextChanged += TextBoxSigmaMin_TextChanged;
+            TextBoxFreshnessBars.Text = spread.FreshnessBars.ToString();
+            TextBoxFreshnessBars.TextChanged += TextBoxFreshnessBars_TextChanged;
+            TextBoxStartIndexValue.Text = spread.StartIndexValue.ToString();
+            TextBoxStartIndexValue.TextChanged += TextBoxStartIndexValue_TextChanged;
+
             CheckDayComboBox();
             CheckHourComboBox();
 
@@ -126,6 +140,8 @@ namespace OsEngine.OsTrader.Panels.Tab
             CheckBoxPercentNormalization.Content = OsLocalization.Trader.Label431;
             CheckBoxPercentNormalization.Click += CheckBoxPercentNormalization_Click;
             ButtonRebuildFormulaNow.Content = OsLocalization.Trader.Label385;
+
+            UpdateCalculationUiState();
 
             this.Closed += BotTabIndexUi_Closed;
             this.Activate();
@@ -156,6 +172,11 @@ namespace OsEngine.OsTrader.Panels.Tab
                 ComboBoxIndexMultType.SelectionChanged -= ComboBoxIndexMultType_SelectionChanged;
                 ComboBoxDaysLookBackInBuilding.SelectionChanged -= ComboBoxDaysLookBackInBuilding_SelectionChanged;
                 ButtonRebuildFormulaNow.Click -= ButtonRebuildFormulaNow_Click;
+                ComboBoxIndexCalculationType.SelectionChanged -= ComboBoxIndexCalculationType_SelectionChanged;
+                TextBoxEwmaLambda.TextChanged -= TextBoxEwmaLambda_TextChanged;
+                TextBoxSigmaMin.TextChanged -= TextBoxSigmaMin_TextChanged;
+                TextBoxFreshnessBars.TextChanged -= TextBoxFreshnessBars_TextChanged;
+                TextBoxStartIndexValue.TextChanged -= TextBoxStartIndexValue_TextChanged;
 
                 this.Closed -= BotTabIndexUi_Closed;
 
@@ -235,6 +256,62 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 // ignore
             }
+        }
+
+        private void ComboBoxIndexCalculationType_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (ComboBoxIndexCalculationType.SelectedItem == null)
+            {
+                return;
+            }
+
+            if (Enum.TryParse(ComboBoxIndexCalculationType.SelectedItem.ToString(), out IndexCalculationType calculationType))
+            {
+                _spread.CalculationType = calculationType;
+                UpdateCalculationUiState();
+            }
+        }
+
+        private void TextBoxEwmaLambda_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (decimal.TryParse(TextBoxEwmaLambda.Text, out decimal value))
+            {
+                _spread.EwmaLambda = value;
+            }
+        }
+
+        private void TextBoxSigmaMin_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (decimal.TryParse(TextBoxSigmaMin.Text, out decimal value))
+            {
+                _spread.SigmaMin = value;
+            }
+        }
+
+        private void TextBoxFreshnessBars_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (int.TryParse(TextBoxFreshnessBars.Text, out int value))
+            {
+                _spread.FreshnessBars = value;
+            }
+        }
+
+        private void TextBoxStartIndexValue_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (decimal.TryParse(TextBoxStartIndexValue.Text, out decimal value))
+            {
+                _spread.StartIndexValue = value;
+            }
+        }
+
+        private void UpdateCalculationUiState()
+        {
+            bool isFormula = _spread.CalculationType == IndexCalculationType.Formula;
+            TabControlItem2.IsEnabled = isFormula;
+            TextboxUserFormula.IsEnabled = isFormula;
+            TextboxUserFormulaSecondTab.IsEnabled = isFormula;
+            ButtonRebuildFormulaNow.IsEnabled = isFormula;
+            CheckBoxPercentNormalization.IsEnabled = isFormula;
         }
 
         private void CheckDayComboBox()
