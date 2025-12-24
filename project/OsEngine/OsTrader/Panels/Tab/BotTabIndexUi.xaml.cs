@@ -101,6 +101,8 @@ namespace OsEngine.OsTrader.Panels.Tab
 
             CheckBoxPercentNormalization.IsChecked = spread.PercentNormalization;
 
+            ComboBoxIndexMultType_SelectionChanged(null, null);
+
             CheckDayComboBox();
             CheckHourComboBox();
 
@@ -270,11 +272,35 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         private void ComboBoxIndexMultType_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
+            if (ComboBoxIndexMultType.SelectedItem == null)
+            {
+                return;
+            }
+
             IndexMultType multType;
 
             if (Enum.TryParse(ComboBoxIndexMultType.SelectedItem.ToString(), out multType))
             {
                 _spread.AutoFormulaBuilder.IndexMultType = multType;
+
+                if (multType == IndexMultType.UsdStrength)
+                {
+                    ComboBoxIndexSecCount.IsEnabled = false;
+                    ComboBoxIndexSortType.IsEnabled = false;
+                    ComboBoxDaysLookBackInBuilding.IsEnabled = false;
+                    ButtonRebuildFormulaNow.IsEnabled = false;
+                    TextboxUserFormula.IsEnabled = false;
+                    TextboxUserFormulaSecondTab.IsEnabled = false;
+                    CheckBoxPercentNormalization.IsEnabled = false;
+                    return;
+                }
+
+                ComboBoxIndexSortType.IsEnabled = true;
+                ComboBoxDaysLookBackInBuilding.IsEnabled = true;
+                ButtonRebuildFormulaNow.IsEnabled = true;
+                TextboxUserFormula.IsEnabled = true;
+                TextboxUserFormulaSecondTab.IsEnabled = true;
+                CheckBoxPercentNormalization.IsEnabled = true;
 
                 if (multType == IndexMultType.Cointegration
                     && ComboBoxIndexSecCount.IsEnabled != false)
