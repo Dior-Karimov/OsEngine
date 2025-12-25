@@ -83,9 +83,10 @@ namespace OsEngine.OsTrader.Panels.Tab
 
                 _grid.Rows[row].Cells[3].Value = component == null || component.Enabled;
                 bool isCross = component != null && component.IsCross;
-                _grid.Rows[row].Cells[4].Value = component != null && component.UseInIndex;
+                _grid.Rows[row].Cells[4].Value = true;
                 _grid.Rows[row].Cells[5].Value = isCross ? "Yes" : "No";
                 _grid.Rows[row].Cells[6].Value = component?.UsdDirection ?? 0;
+                _grid.Rows[row].Cells[4].ReadOnly = true;
             }
 
             _grid.Columns[0].Width = 35;
@@ -272,7 +273,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                 object useInIndexCell = _grid.Rows[i].Cells[4].Value;
 
                 component.Enabled = enabledCell != null && Convert.ToBoolean(enabledCell);
-                component.UseInIndex = useInIndexCell != null && Convert.ToBoolean(useInIndexCell);
+                component.UseInIndex = true;
             }
         }
 

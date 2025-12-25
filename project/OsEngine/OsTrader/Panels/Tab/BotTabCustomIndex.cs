@@ -378,10 +378,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                 existing.TimeFrameTimeSpan = connector.TimeFrameTimeSpan;
                 existing.SecurityName = connector.SecurityName;
 
-                if (isNew)
-                {
-                    existing.UseInIndex = true;
-                }
+                existing.UseInIndex = true;
             }
 
             Settings.Components.RemoveAll(c => Tabs.All(t => t.UniqueName != c.UniqueName));
