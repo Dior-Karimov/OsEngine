@@ -1,0 +1,80 @@
+<Window x:Class="OsEngine.OsTrader.Panels.Tab.BotTabCustomIndexUi"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Custom Index" Height="520" MinHeight="520" Width="760" MinWidth="760" MaxWidth="980" Style="{StaticResource WindowStyleCanResize}" ResizeMode="CanResize" WindowStartupLocation="CenterScreen" Icon="/Images/OsLogo.ico">
+    <Window.Background>
+        <LinearGradientBrush EndPoint="0.5,1" MappingMode="RelativeToBoundingBox" StartPoint="0.5,0">
+            <GradientStop Color="#FF323234" Offset="1"/>
+            <GradientStop Color="#FFE0E0EA"/>
+        </LinearGradientBrush>
+    </Window.Background>
+    <Grid>
+        <TabControl>
+            <TabItem Header="Components">
+                <Grid>
+                    <WindowsFormsHost Name="HostComponents" Margin="10,10,90,70" />
+                    <Button Name="ButtonAdd" Content="+" Height="50" Width="60" FontSize="14" FontFamily="Calibri" Margin="0,20,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Click="ButtonAdd_Click" />
+                    <RepeatButton Name="ButtonRemove" Content="-" Height="50" Width="60" FontSize="14" FontFamily="Calibri" Margin="0,90,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Delay="1000" Interval="10" Click="ButtonRemove_Click" />
+                    <Button Name="ButtonEdit" Content="Edit" Height="40" Width="60" FontSize="12" FontFamily="Calibri" Margin="0,160,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Click="ButtonEdit_Click" />
+                    <Button Name="ButtonApply" Content="Apply" Height="40" Width="120" FontSize="12" FontFamily="Calibri" Margin="0,0,10,10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Click="ButtonApply_Click" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Settings">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="240"/>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Label Content="Volatility mode" Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"/>
+                    <ComboBox Name="ComboVolatility" Grid.Row="0" Grid.Column="1" Height="24"/>
+
+                    <Label Content="Vol lookback" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"/>
+                    <TextBox Name="TextVolLookback" Grid.Row="1" Grid.Column="1" Height="24"/>
+
+                    <Label Content="Sigma min" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"/>
+                    <TextBox Name="TextSigmaMin" Grid.Row="2" Grid.Column="1" Height="24"/>
+
+                    <Label Content="EWMA lambda" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"/>
+                    <TextBox Name="TextEwmaLambda" Grid.Row="3" Grid.Column="1" Height="24"/>
+
+                    <Label Content="Staleness mode" Grid.Row="0" Grid.Column="2" VerticalAlignment="Center"/>
+                    <ComboBox Name="ComboStaleness" Grid.Row="0" Grid.Column="3" Height="24"/>
+
+                    <Label Content="Max staleness bars" Grid.Row="1" Grid.Column="2" VerticalAlignment="Center"/>
+                    <TextBox Name="TextMaxStalenessBars" Grid.Row="1" Grid.Column="3" Height="24"/>
+
+                    <Label Content="Max staleness sec" Grid.Row="2" Grid.Column="2" VerticalAlignment="Center"/>
+                    <TextBox Name="TextMaxStalenessSeconds" Grid.Row="2" Grid.Column="3" Height="24"/>
+
+                    <Label Content="Auto staleness x" Grid.Row="3" Grid.Column="2" VerticalAlignment="Center"/>
+                    <TextBox Name="TextAutoStaleness" Grid.Row="3" Grid.Column="3" Height="24"/>
+
+                    <Label Content="Min active components" Grid.Row="4" Grid.Column="0" VerticalAlignment="Center"/>
+                    <TextBox Name="TextMinActive" Grid.Row="4" Grid.Column="1" Height="24"/>
+
+                    <Label Content="Update mode" Grid.Row="4" Grid.Column="2" VerticalAlignment="Center"/>
+                    <ComboBox Name="ComboUpdateMode" Grid.Row="4" Grid.Column="3" Height="24"/>
+
+                    <Label Content="Calculation depth" Grid.Row="5" Grid.Column="0" VerticalAlignment="Center"/>
+                    <TextBox Name="TextDepth" Grid.Row="5" Grid.Column="1" Height="24"/>
+
+                    <Button Name="ButtonSaveSettings" Content="Save" Grid.Row="7" Grid.Column="3" Width="120" Height="36" HorizontalAlignment="Right" Click="ButtonSaveSettings_Click" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
