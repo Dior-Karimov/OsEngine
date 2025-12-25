@@ -98,8 +98,6 @@ namespace OsEngine.OsTrader.Panels.Tab
             ComboUpdateMode.SelectedItem = _tab.Settings.UpdateMode.ToString();
 
             TextVolLookback.Text = _tab.Settings.VolLookbackBars.ToString();
-            TextSigmaMin.Text = _tab.Settings.SigmaMin.ToString(CultureInfo.InvariantCulture);
-            TextEwmaLambda.Text = _tab.Settings.EwmaLambda.ToString(CultureInfo.InvariantCulture);
             TextMaxStalenessBars.Text = _tab.Settings.MaxStalenessBars.ToString();
             TextMaxStalenessSeconds.Text = _tab.Settings.MaxStalenessSeconds.ToString();
             TextAutoStaleness.Text = _tab.Settings.AutoStalenessMultiplier.ToString(CultureInfo.InvariantCulture);
@@ -109,8 +107,10 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         private void ButtonAdd_Click(object sender, RoutedEventArgs e)
         {
-            _tab.AddSecurityTab();
-            ReloadGrid();
+            if (_tab.ShowNewSecurityDialog())
+            {
+                _tab.UiSecuritiesSelection.Closed += UiSecuritiesSelectionOnClosed;
+            }
         }
 
         private void ButtonRemove_Click(object sender, RoutedEventArgs e)
@@ -143,21 +143,17 @@ namespace OsEngine.OsTrader.Panels.Tab
             ReloadGrid();
         }
 
+        private void UiSecuritiesSelectionOnClosed(object sender, EventArgs e)
+        {
+            _tab.UiSecuritiesSelection.Closed -= UiSecuritiesSelectionOnClosed;
+            ReloadGrid();
+        }
+
         private void ButtonSaveSettings_Click(object sender, RoutedEventArgs e)
         {
             if (int.TryParse(TextVolLookback.Text, out int lookback))
             {
                 _tab.Settings.VolLookbackBars = lookback;
-            }
-
-            if (decimal.TryParse(TextSigmaMin.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal sigmaMin))
-            {
-                _tab.Settings.SigmaMin = sigmaMin;
-            }
-
-            if (decimal.TryParse(TextEwmaLambda.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal lambda))
-            {
-                _tab.Settings.EwmaLambda = lambda;
             }
 
             if (int.TryParse(TextMaxStalenessBars.Text, out int maxBars))

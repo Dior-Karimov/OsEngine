@@ -13,7 +13,7 @@
             <TabItem Header="Components">
                 <Grid>
                     <WindowsFormsHost Name="HostComponents" Margin="10,10,90,70" />
-                    <Button Name="ButtonAdd" Content="+" Height="50" Width="60" FontSize="14" FontFamily="Calibri" Margin="0,20,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Click="ButtonAdd_Click" />
+                    <Button Name="ButtonAdd" Content="Select" Height="50" Width="60" FontSize="12" FontFamily="Calibri" Margin="0,20,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Click="ButtonAdd_Click" />
                     <RepeatButton Name="ButtonRemove" Content="-" Height="50" Width="60" FontSize="14" FontFamily="Calibri" Margin="0,90,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Delay="1000" Interval="10" Click="ButtonRemove_Click" />
                     <Button Name="ButtonEdit" Content="Edit" Height="40" Width="60" FontSize="12" FontFamily="Calibri" Margin="0,160,10,0" VerticalAlignment="Top" HorizontalAlignment="Right" Click="ButtonEdit_Click" />
                     <Button Name="ButtonApply" Content="Apply" Height="40" Width="120" FontSize="12" FontFamily="Calibri" Margin="0,0,10,10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Click="ButtonApply_Click" />
@@ -44,12 +44,6 @@
 
                     <Label Content="Vol lookback" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center"/>
                     <TextBox Name="TextVolLookback" Grid.Row="1" Grid.Column="1" Height="24"/>
-
-                    <Label Content="Sigma min" Grid.Row="2" Grid.Column="0" VerticalAlignment="Center"/>
-                    <TextBox Name="TextSigmaMin" Grid.Row="2" Grid.Column="1" Height="24"/>
-
-                    <Label Content="EWMA lambda" Grid.Row="3" Grid.Column="0" VerticalAlignment="Center"/>
-                    <TextBox Name="TextEwmaLambda" Grid.Row="3" Grid.Column="1" Height="24"/>
 
                     <Label Content="Staleness mode" Grid.Row="0" Grid.Column="2" VerticalAlignment="Center"/>
                     <ComboBox Name="ComboStaleness" Grid.Row="0" Grid.Column="3" Height="24"/>

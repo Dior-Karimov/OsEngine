@@ -122,6 +122,11 @@ namespace OsEngine.OsTrader.Panels.Tab
                 _ui.Close();
             }
 
+            if (UiSecuritiesSelection != null)
+            {
+                UiSecuritiesSelection.Close();
+            }
+
             if (_engine != null)
             {
                 _engine.IndexUpdatedEvent -= EngineOnIndexUpdatedEvent;
@@ -199,6 +204,100 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         #region Connectors
 
+        public bool ShowNewSecurityDialog()
+        {
+            if (UiSecuritiesSelection == null)
+            {
+                Creator = GetCurrentCreator();
+                UiSecuritiesSelection = new MassSourcesCreateUi(Creator);
+                UiSecuritiesSelection.LogMessageEvent += SendNewLogMessage;
+                UiSecuritiesSelection.Closed += UiSecuritiesSelectionOnClosed;
+                UiSecuritiesSelection.Show();
+                return true;
+            }
+
+            UiSecuritiesSelection.Activate();
+            return false;
+        }
+
+        public void SetNewSecuritiesList(List<ActivatedSecurity> securitiesList)
+        {
+            bool isDeleteTab = false;
+
+            ConnectorCandles[] connectors = Tabs.ToArray();
+
+            for (int i = 0; i < connectors.Length; i++)
+            {
+                connectors[i].Delete();
+                isDeleteTab = true;
+            }
+
+            if (isDeleteTab)
+            {
+                Save();
+            }
+
+            for (int i = 0; i < securitiesList.Count; i++)
+            {
+                TryRunSecurity(securitiesList[i], Creator);
+            }
+
+            Save();
+        }
+
+        private void UiSecuritiesSelectionOnClosed(object sender, EventArgs e)
+        {
+            try
+            {
+                UiSecuritiesSelection.LogMessageEvent -= SendNewLogMessage;
+                UiSecuritiesSelection.Closed -= UiSecuritiesSelectionOnClosed;
+
+                if (UiSecuritiesSelection.IsAccepted == false)
+                {
+                    UiSecuritiesSelection = null;
+                    return;
+                }
+
+                bool isDeleteTab = false;
+
+                for (int i = 0; i < Tabs.Count; i++)
+                {
+                    if (Tabs[i].TimeFrame != Creator.TimeFrame)
+                    {
+                        Tabs[i].Delete();
+                        Tabs.RemoveAt(i);
+                        isDeleteTab = true;
+                        i--;
+                    }
+                }
+
+                if (isDeleteTab)
+                {
+                    Save();
+                }
+
+                Creator = UiSecuritiesSelection.SourcesCreator;
+
+                if (Creator.SecuritiesNames != null && Creator.SecuritiesNames.Count != 0)
+                {
+                    for (int i = 0; i < Creator.SecuritiesNames.Count; i++)
+                    {
+                        TryRunSecurity(Creator.SecuritiesNames[i], Creator);
+                    }
+
+                    Save();
+                }
+
+                UiSecuritiesSelection.SourcesCreator = null;
+            }
+            catch (Exception ex)
+            {
+                SendNewLogMessage(ex.ToString(), LogMessageType.Error);
+            }
+
+            UiSecuritiesSelection = null;
+        }
+
         public void AddSecurityTab()
         {
             ConnectorCandles connector = new ConnectorCandles(TabName + Tabs.Count, _startProgram, false);
@@ -271,6 +370,133 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
 
             Settings.Components.RemoveAll(c => Tabs.All(t => t.UniqueName != c.UniqueName));
+        }
+
+        public MassSourcesCreateUi UiSecuritiesSelection;
+
+        public MassSourcesCreator Creator;
+
+        private MassSourcesCreator GetCurrentCreator()
+        {
+            MassSourcesCreator creator = new MassSourcesCreator(_startProgram);
+
+            if (Tabs.Count == 0)
+            {
+                return creator;
+            }
+
+            if (Tabs.Count > 0)
+            {
+                ConnectorCandles connector = Tabs[0];
+                creator.ServerType = connector.ServerType;
+                creator.ServerName = connector.ServerFullName;
+                creator.TimeFrame = connector.TimeFrame;
+                creator.EmulatorIsOn = connector.EmulatorIsOn;
+                creator.SecuritiesClass = connector.SecurityClass;
+                creator.PortfolioName = connector.PortfolioName;
+                creator.SaveTradesInCandles = connector.SaveTradesInCandles;
+                creator.MarketDepthBuildMaxSpread = connector.TimeFrameBuilder.MarketDepthBuildMaxSpread;
+                creator.MarketDepthBuildMaxSpreadIsOn = connector.TimeFrameBuilder.MarketDepthBuildMaxSpreadIsOn;
+
+                creator.CandleCreateMethodType = connector.CandleCreateMethodType;
+                creator.CandleMarketDataType = connector.CandleMarketDataType;
+                creator.CommissionType = connector.CommissionType;
+                creator.CommissionValue = connector.CommissionValue;
+                creator.CandleSeriesRealization.SetSaveString(connector.TimeFrameBuilder.CandleSeriesRealization.GetSaveString());
+            }
+
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                ConnectorCandles connector = Tabs[i];
+
+                if (string.IsNullOrEmpty(connector.SecurityName))
+                {
+                    continue;
+                }
+
+                ActivatedSecurity activatedSecurity = new ActivatedSecurity
+                {
+                    SecurityName = connector.SecurityName,
+                    SecurityClass = connector.SecurityClass,
+                    IsOn = true
+                };
+
+                creator.SecuritiesNames.Add(activatedSecurity);
+            }
+
+            return creator;
+        }
+
+        private void TryRunSecurity(ActivatedSecurity security, MassSourcesCreator creator)
+        {
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                if (Tabs[i].SecurityName == security.SecurityName &&
+                    Tabs[i].ServerType == creator.ServerType &&
+                    Tabs[i].ServerFullName == creator.ServerName &&
+                    Tabs[i].TimeFrame == creator.TimeFrame &&
+                    Tabs[i].CandleMarketDataType == creator.CandleMarketDataType)
+                {
+                    return;
+                }
+
+                if (Tabs[i].SecurityName == security.SecurityName &&
+                    Tabs[i].ServerType == creator.ServerType &&
+                    (Tabs[i].TimeFrame != creator.TimeFrame ||
+                     Tabs[i].CandleMarketDataType != creator.CandleMarketDataType))
+                {
+                    Tabs[i].Delete();
+                    Tabs.RemoveAt(i);
+                }
+            }
+
+            int num = Tabs.Count;
+
+            while (true)
+            {
+                bool isNotInArray = true;
+
+                for (int i = 0; i < Tabs.Count; i++)
+                {
+                    if (Tabs[i].UniqueName == TabName + num)
+                    {
+                        num++;
+                        isNotInArray = false;
+                        break;
+                    }
+                }
+
+                if (isNotInArray)
+                {
+                    break;
+                }
+            }
+
+            ConnectorCandles connector = new ConnectorCandles(TabName + num, _startProgram, false)
+            {
+                ServerType = creator.ServerType,
+                ServerFullName = creator.ServerName,
+                SecurityName = security.SecurityName,
+                SecurityClass = security.SecurityClass,
+                TimeFrame = creator.TimeFrame,
+                EmulatorIsOn = creator.EmulatorIsOn,
+                PortfolioName = creator.PortfolioName,
+                SaveTradesInCandles = creator.SaveTradesInCandles,
+                CandleMarketDataType = creator.CandleMarketDataType,
+                CandleCreateMethodType = creator.CandleCreateMethodType,
+                CommissionType = creator.CommissionType,
+                CommissionValue = creator.CommissionValue
+            };
+
+            connector.TimeFrameBuilder.MarketDepthBuildMaxSpread = creator.MarketDepthBuildMaxSpread;
+            connector.TimeFrameBuilder.MarketDepthBuildMaxSpreadIsOn = creator.MarketDepthBuildMaxSpreadIsOn;
+
+            connector.TimeFrameBuilder.CandleSeriesRealization.SetSaveString(
+                creator.CandleSeriesRealization.GetSaveString());
+
+            Tabs.Add(connector);
+            SyncComponents();
+            ResetDataFeed();
         }
 
         #endregion
