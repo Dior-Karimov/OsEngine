@@ -360,12 +360,9 @@ namespace OsEngine.OsTrader.Panels.Tab
                 existing.TimeFrameTimeSpan = connector.TimeFrameTimeSpan;
                 existing.SecurityName = connector.SecurityName;
 
-                if (existing.IsCross)
+                if (isNew)
                 {
-                    if (isNew)
-                    {
-                        existing.UseInIndex = false;
-                    }
+                    existing.UseInIndex = true;
                 }
             }
 

@@ -139,6 +139,7 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         private void ButtonApply_Click(object sender, RoutedEventArgs e)
         {
+            ApplyGridValues();
             _tab.Save();
             ReloadGrid();
         }
@@ -240,6 +241,29 @@ namespace OsEngine.OsTrader.Panels.Tab
             component.UseInIndex = useInIndex;
 
             _tab.Save();
+        }
+
+        private void ApplyGridValues()
+        {
+            for (int i = 0; i < _grid.Rows.Count; i++)
+            {
+                string uniqueName = _grid.Rows[i].Cells[1].Value?.ToString();
+
+                if (string.IsNullOrEmpty(uniqueName))
+                {
+                    continue;
+                }
+
+                IndexComponentSettings component = _tab.Settings.Components.FirstOrDefault(c => c.UniqueName == uniqueName);
+
+                if (component == null)
+                {
+                    continue;
+                }
+
+                component.Enabled = Convert.ToBoolean(_grid.Rows[i].Cells[3].Value);
+                component.UseInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
+            }
         }
 
         private readonly BotTabCustomIndex _tab;
