@@ -22,6 +22,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             InitializeComponent();
 
             _tab = tab;
+            _tab.SecuritiesSelectionClosedEvent += OnSecuritiesSelectionClosedEvent;
 
             _grid = DataGridFactory.GetDataGridView(DataGridViewSelectionMode.FullRowSelect, DataGridViewAutoSizeRowsMode.AllCells);
             _grid.CellValueChanged += GridOnCellValueChanged;
@@ -81,9 +82,15 @@ namespace OsEngine.OsTrader.Panels.Tab
                 _grid.Rows[row].Cells[2].Value = connector.SecurityName;
 
                 _grid.Rows[row].Cells[3].Value = component == null || component.Enabled;
-                _grid.Rows[row].Cells[4].Value = component != null && component.UseInIndex;
-                _grid.Rows[row].Cells[5].Value = component != null && component.IsCross ? "Yes" : "No";
+                bool isCross = component != null && component.IsCross;
+                _grid.Rows[row].Cells[4].Value = component != null && component.UseInIndex && isCross == false;
+                _grid.Rows[row].Cells[5].Value = isCross ? "Yes" : "No";
                 _grid.Rows[row].Cells[6].Value = component?.UsdDirection ?? 0;
+
+                if (isCross)
+                {
+                    _grid.Rows[row].Cells[4].ReadOnly = true;
+                }
             }
 
             _grid.Columns[0].Width = 35;
@@ -109,7 +116,7 @@ namespace OsEngine.OsTrader.Panels.Tab
         {
             if (_tab.ShowNewSecurityDialog())
             {
-                _tab.UiSecuritiesSelection.Closed += UiSecuritiesSelectionOnClosed;
+                return;
             }
         }
 
@@ -143,10 +150,9 @@ namespace OsEngine.OsTrader.Panels.Tab
             _tab.Save();
             ReloadGrid();
         }
-
-        private void UiSecuritiesSelectionOnClosed(object sender, EventArgs e)
+        
+        private void OnSecuritiesSelectionClosedEvent()
         {
-            _tab.UiSecuritiesSelection.Closed -= UiSecuritiesSelectionOnClosed;
             ReloadGrid();
         }
 
@@ -262,8 +268,23 @@ namespace OsEngine.OsTrader.Panels.Tab
                 }
 
                 component.Enabled = Convert.ToBoolean(_grid.Rows[i].Cells[3].Value);
-                component.UseInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
+                bool useInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
+
+                if (component.IsCross)
+                {
+                    component.UseInIndex = false;
+                }
+                else
+                {
+                    component.UseInIndex = useInIndex;
+                }
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _tab.SecuritiesSelectionClosedEvent -= OnSecuritiesSelectionClosedEvent;
+            base.OnClosed(e);
         }
 
         private readonly BotTabCustomIndex _tab;

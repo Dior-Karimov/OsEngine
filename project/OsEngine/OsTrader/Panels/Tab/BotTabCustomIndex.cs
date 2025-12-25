@@ -97,6 +97,7 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         public event Action<List<Candle>> IndexChangeEvent;
         public event Action<IndexSnapshot> IndexUpdatedEvent;
+        public event Action SecuritiesSelectionClosedEvent;
 
         public IndexSettings Settings { get; } = new IndexSettings();
 
@@ -296,6 +297,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
 
             UiSecuritiesSelection = null;
+            SecuritiesSelectionClosedEvent?.Invoke();
         }
 
         public void AddSecurityTab()
@@ -362,7 +364,11 @@ namespace OsEngine.OsTrader.Panels.Tab
 
                 if (isNew)
                 {
-                    existing.UseInIndex = true;
+                    existing.UseInIndex = existing.IsCross == false;
+                }
+                else if (existing.IsCross)
+                {
+                    existing.UseInIndex = false;
                 }
             }
 
