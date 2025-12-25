@@ -223,6 +223,8 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         public void SetNewSecuritiesList(List<ActivatedSecurity> securitiesList)
         {
+            Dictionary<string, ComponentState> previousState = CaptureComponentState();
+
             bool isDeleteTab = false;
 
             ConnectorCandles[] connectors = Tabs.ToArray();
@@ -243,6 +245,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                 TryRunSecurity(securitiesList[i], Creator);
             }
 
+            RestoreComponentState(previousState);
             Save();
         }
 
@@ -277,6 +280,8 @@ namespace OsEngine.OsTrader.Panels.Tab
                     Save();
                 }
 
+                Dictionary<string, ComponentState> previousState = CaptureComponentState();
+
                 Creator = UiSecuritiesSelection.SourcesCreator;
 
                 if (Creator.SecuritiesNames != null && Creator.SecuritiesNames.Count != 0)
@@ -286,6 +291,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                         TryRunSecurity(Creator.SecuritiesNames[i], Creator);
                     }
 
+                    RestoreComponentState(previousState);
                     Save();
                 }
 
@@ -379,6 +385,63 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
 
             Settings.Components.RemoveAll(c => Tabs.All(t => t.UniqueName != c.UniqueName));
+        }
+
+        private Dictionary<string, ComponentState> CaptureComponentState()
+        {
+            Dictionary<string, ComponentState> state = new Dictionary<string, ComponentState>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < Settings.Components.Count; i++)
+            {
+                IndexComponentSettings component = Settings.Components[i];
+
+                if (string.IsNullOrEmpty(component.SecurityName))
+                {
+                    continue;
+                }
+
+                state[component.SecurityName] = new ComponentState
+                {
+                    Enabled = component.Enabled,
+                    UseInIndex = component.UseInIndex
+                };
+            }
+
+            return state;
+        }
+
+        private void RestoreComponentState(Dictionary<string, ComponentState> state)
+        {
+            if (state == null || state.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < Settings.Components.Count; i++)
+            {
+                IndexComponentSettings component = Settings.Components[i];
+
+                if (string.IsNullOrEmpty(component.SecurityName))
+                {
+                    continue;
+                }
+
+                if (state.TryGetValue(component.SecurityName, out ComponentState saved))
+                {
+                    component.Enabled = saved.Enabled;
+                    component.UseInIndex = saved.UseInIndex;
+                }
+                else if (component.UseInIndex == false)
+                {
+                    component.UseInIndex = true;
+                }
+            }
+        }
+
+        private struct ComponentState
+        {
+            public bool Enabled;
+            public bool UseInIndex;
         }
 
         public MassSourcesCreateUi UiSecuritiesSelection;
