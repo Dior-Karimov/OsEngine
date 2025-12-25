@@ -5,6 +5,7 @@
 
 using OsEngine.Charts.CandleChart;
 using OsEngine.Entity;
+using OsEngine.Indicators;
 using OsEngine.Logging;
 using OsEngine.Market.Connectors;
 using OsEngine.OsTrader.Panels.Tab.IndexEngine;
@@ -95,8 +96,11 @@ namespace OsEngine.OsTrader.Panels.Tab
         public List<Candle> Candles { get; private set; } = new List<Candle>();
 
         public event Action<List<Candle>> IndexChangeEvent;
+        public event Action<IndexSnapshot> IndexUpdatedEvent;
 
         public IndexSettings Settings { get; } = new IndexSettings();
+
+        public IndexSnapshot LastSnapshot { get; private set; }
 
         public void ApplySettings()
         {
@@ -447,6 +451,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
 
             LastTimeCandleUpdate = snapshot.Time;
+            LastSnapshot = snapshot;
 
             UpdateCandles(snapshot);
 
@@ -463,6 +468,8 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 IndexChangeEvent(Candles);
             }
+
+            IndexUpdatedEvent?.Invoke(snapshot);
         }
 
         private void UpdateCandles(IndexSnapshot snapshot)
@@ -517,6 +524,25 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 Candles.RemoveAt(0);
             }
+        }
+
+        #endregion
+
+        #region Indicators
+
+        public IIndicator CreateCandleIndicator(IIndicator indicator, string nameArea)
+        {
+            return _chartMaster.CreateIndicator(indicator, nameArea);
+        }
+
+        public void DeleteCandleIndicator(IIndicator indicator)
+        {
+            _chartMaster.DeleteIndicator(indicator);
+        }
+
+        public List<IIndicator> Indicators
+        {
+            get { return _chartMaster.Indicators; }
         }
 
         #endregion

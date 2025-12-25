@@ -53,6 +53,19 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.Models
 
         public bool IsReady => _count >= 2;
 
+        public double Mean
+        {
+            get
+            {
+                if (_count == 0)
+                {
+                    return 0;
+                }
+
+                return _sum / _count;
+            }
+        }
+
         public double StdDev
         {
             get
