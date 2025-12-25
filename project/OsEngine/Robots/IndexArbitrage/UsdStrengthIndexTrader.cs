@@ -10,6 +10,7 @@ using OsEngine.Indicators;
 using OsEngine.Language;
 using OsEngine.Logging;
 using OsEngine.Market;
+using OsEngine.Market.Servers;
 using OsEngine.OsTrader.Panels;
 using OsEngine.OsTrader.Panels.Attributes;
 using OsEngine.OsTrader.Panels.Tab;
@@ -280,7 +281,7 @@ namespace OsEngine.Robots.IndexArbitrage
 
             if (Math.Abs(zScore) <= _zExit.ValueDecimal)
             {
-                _tradeTab.CloseAtMarket(position, "IndexDeviationExit");
+                _tradeTab.CloseAtMarket(position, position.OpenVolume, "IndexDeviationExit");
             }
         }
 
@@ -299,7 +300,7 @@ namespace OsEngine.Robots.IndexArbitrage
 
                 if (position.State == PositionStateType.Open)
                 {
-                    _tradeTab.CloseAtMarket(position, reason);
+                    _tradeTab.CloseAtMarket(position, position.OpenVolume, reason);
                 }
             }
         }
