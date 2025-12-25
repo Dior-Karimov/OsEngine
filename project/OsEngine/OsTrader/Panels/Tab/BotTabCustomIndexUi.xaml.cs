@@ -141,6 +141,12 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         private void ButtonApply_Click(object sender, RoutedEventArgs e)
         {
+            if (_grid.IsCurrentCellDirty)
+            {
+                _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+
+            _grid.EndEdit();
             ApplyGridValues();
             _tab.Save();
             ReloadGrid();
@@ -262,8 +268,11 @@ namespace OsEngine.OsTrader.Panels.Tab
                     continue;
                 }
 
-                component.Enabled = Convert.ToBoolean(_grid.Rows[i].Cells[3].Value);
-                component.UseInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
+                object enabledCell = _grid.Rows[i].Cells[3].Value;
+                object useInIndexCell = _grid.Rows[i].Cells[4].Value;
+
+                component.Enabled = enabledCell != null && Convert.ToBoolean(enabledCell);
+                component.UseInIndex = useInIndexCell != null && Convert.ToBoolean(useInIndexCell);
             }
         }
 
