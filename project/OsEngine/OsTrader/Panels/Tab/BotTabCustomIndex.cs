@@ -349,6 +349,12 @@ namespace OsEngine.OsTrader.Panels.Tab
                 string uniqueName = connector.UniqueName;
                 IndexComponentSettings existing = Settings.Components.FirstOrDefault(c => c.UniqueName == uniqueName);
 
+                if (existing == null && string.IsNullOrEmpty(connector.SecurityName) == false)
+                {
+                    existing = Settings.Components.FirstOrDefault(c =>
+                        string.Equals(c.SecurityName, connector.SecurityName, StringComparison.OrdinalIgnoreCase));
+                }
+
                 bool isNew = false;
 
                 if (existing == null)
@@ -357,6 +363,10 @@ namespace OsEngine.OsTrader.Panels.Tab
                     Settings.Components.Add(existing);
                     isNew = true;
                 }
+                else if (existing.UniqueName != uniqueName)
+                {
+                    existing.UniqueName = uniqueName;
+                }
 
                 existing.UpdateSecurity(connector.SecurityName);
                 existing.TimeFrameTimeSpan = connector.TimeFrameTimeSpan;
@@ -364,11 +374,7 @@ namespace OsEngine.OsTrader.Panels.Tab
 
                 if (isNew)
                 {
-                    existing.UseInIndex = existing.IsCross == false;
-                }
-                else if (existing.IsCross)
-                {
-                    existing.UseInIndex = false;
+                    existing.UseInIndex = true;
                 }
             }
 

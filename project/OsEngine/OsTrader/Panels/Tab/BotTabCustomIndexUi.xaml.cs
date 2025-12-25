@@ -83,14 +83,9 @@ namespace OsEngine.OsTrader.Panels.Tab
 
                 _grid.Rows[row].Cells[3].Value = component == null || component.Enabled;
                 bool isCross = component != null && component.IsCross;
-                _grid.Rows[row].Cells[4].Value = component != null && component.UseInIndex && isCross == false;
+                _grid.Rows[row].Cells[4].Value = component != null && component.UseInIndex;
                 _grid.Rows[row].Cells[5].Value = isCross ? "Yes" : "No";
                 _grid.Rows[row].Cells[6].Value = component?.UsdDirection ?? 0;
-
-                if (isCross)
-                {
-                    _grid.Rows[row].Cells[4].ReadOnly = true;
-                }
             }
 
             _grid.Columns[0].Width = 35;
@@ -268,16 +263,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                 }
 
                 component.Enabled = Convert.ToBoolean(_grid.Rows[i].Cells[3].Value);
-                bool useInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
-
-                if (component.IsCross)
-                {
-                    component.UseInIndex = false;
-                }
-                else
-                {
-                    component.UseInIndex = useInIndex;
-                }
+                component.UseInIndex = Convert.ToBoolean(_grid.Rows[i].Cells[4].Value);
             }
         }
 
