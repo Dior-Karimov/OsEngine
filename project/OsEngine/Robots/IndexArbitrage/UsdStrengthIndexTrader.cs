@@ -32,6 +32,9 @@ namespace OsEngine.Robots.IndexArbitrage
         private readonly StrategyParameterDecimal _zExit;
         private readonly StrategyParameterDecimal _scoreSpreadWeight;
         private readonly StrategyParameterDecimal _scoreVolWeight;
+        private readonly StrategyParameterDecimal _stopLossPercent;
+        private readonly StrategyParameterDecimal _takeProfitPercent;
+        private readonly StrategyParameterInt _maxHoldMinutes;
 
         private readonly StrategyParameterTimeOfDay _tradeStart;
         private readonly StrategyParameterTimeOfDay _tradeEnd;
@@ -66,6 +69,9 @@ namespace OsEngine.Robots.IndexArbitrage
             _zExit = CreateParameter("Z exit", 0.5m, 0.1m, 5m, 0.1m);
             _scoreSpreadWeight = CreateParameter("Score spread weight", 1.0m, 0m, 10m, 0.1m);
             _scoreVolWeight = CreateParameter("Score vol weight", 1.0m, 0m, 10m, 0.1m);
+            _stopLossPercent = CreateParameter("Stop loss %", 0.5m, 0.05m, 5m, 0.05m);
+            _takeProfitPercent = CreateParameter("Take profit %", 0.8m, 0.05m, 10m, 0.05m);
+            _maxHoldMinutes = CreateParameter("Max hold minutes", 30, 1, 600, 5);
 
             _tradeStart = CreateParameterTimeOfDay("Trade start", 10, 0, 0, 0);
             _tradeEnd = CreateParameterTimeOfDay("Trade end", 18, 0, 0, 0);
@@ -245,8 +251,13 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
-            decimal deviation = CalculateDeviation(candles, _indexTab.Candles);
+            List<Position> positions = tab.PositionsOpenAll;
+            if (positions.Count == 0)
+            {
+                return;
+            }
 
+            decimal deviation = CalculateDeviation(candles, _indexTab.Candles);
             RollingStatistics stats = GetDeviationStats(tab.Security.Name);
             stats.Add((double)deviation);
 
@@ -257,9 +268,24 @@ namespace OsEngine.Robots.IndexArbitrage
 
             decimal zScore = (decimal)(((double)deviation - stats.Mean) / stats.StdDev);
 
-            if (Math.Abs(zScore) <= _zExit.ValueDecimal)
+            for (int i = 0; i < positions.Count; i++)
             {
-                ClosePosition(tab, "IndexDeviationExit");
+                Position position = positions[i];
+                if (position.State != PositionStateType.Open)
+                {
+                    continue;
+                }
+
+                if (ShouldExitByRisk(position, tab, candles[candles.Count - 1].TimeStart))
+                {
+                    tab.CloseAtMarket(position, position.OpenVolume, "RiskExit");
+                    continue;
+                }
+
+                if (Math.Abs(zScore) <= _zExit.ValueDecimal)
+                {
+                    tab.CloseAtMarket(position, position.OpenVolume, "IndexDeviationExit");
+                }
             }
         }
 
@@ -352,6 +378,51 @@ namespace OsEngine.Robots.IndexArbitrage
             score -= deviationStd * _scoreVolWeight.ValueDecimal;
 
             return score;
+        }
+
+        private bool ShouldExitByRisk(Position position, BotTabSimple tab, DateTime now)
+        {
+            decimal entry = position.EntryPrice;
+
+            if (entry <= 0)
+            {
+                return false;
+            }
+
+            decimal currentPrice = position.Direction == Side.Buy ? tab.PriceBestBid : tab.PriceBestAsk;
+
+            if (currentPrice <= 0)
+            {
+                return false;
+            }
+
+            decimal changePercent = (currentPrice - entry) / entry * 100m;
+
+            if (position.Direction == Side.Sell)
+            {
+                changePercent = -changePercent;
+            }
+
+            if (changePercent <= -_stopLossPercent.ValueDecimal)
+            {
+                return true;
+            }
+
+            if (changePercent >= _takeProfitPercent.ValueDecimal)
+            {
+                return true;
+            }
+
+            if (_maxHoldMinutes.ValueInt > 0)
+            {
+                TimeSpan hold = now - position.TimeOpen;
+                if (hold.TotalMinutes >= _maxHoldMinutes.ValueInt)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private RollingStatistics GetDeviationStats(string securityName)
