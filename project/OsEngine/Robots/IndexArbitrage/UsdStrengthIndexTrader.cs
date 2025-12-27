@@ -35,6 +35,8 @@ namespace OsEngine.Robots.IndexArbitrage
         private readonly StrategyParameterDecimal _stopLossPercent;
         private readonly StrategyParameterDecimal _takeProfitPercent;
         private readonly StrategyParameterInt _maxHoldMinutes;
+        private readonly StrategyParameterDecimal _monthlyProfitTargetPercent;
+        private readonly StrategyParameterDecimal _monthlyLossLimitPercent;
 
         private readonly StrategyParameterTimeOfDay _tradeStart;
         private readonly StrategyParameterTimeOfDay _tradeEnd;
@@ -51,6 +53,10 @@ namespace OsEngine.Robots.IndexArbitrage
 
         private readonly Dictionary<string, RollingStatistics> _deviationStatsBySecurity = new Dictionary<string, RollingStatistics>();
         private DateTime _lastIndexTime = DateTime.MinValue;
+        private DateTime _monthAnchor = DateTime.MinValue;
+        private decimal _monthStartPortfolioValue;
+        private decimal _monthClosedProfitAbs;
+        private bool _monthlyStopTrading;
 
         public UsdStrengthIndexTrader(string name, StartProgram startProgram) : base(name, startProgram)
         {
@@ -61,6 +67,7 @@ namespace OsEngine.Robots.IndexArbitrage
             TabCreate(BotTabType.Screener);
             _screener = TabsScreener[0];
             _screener.CandleFinishedEvent += ScreenerOnCandleFinishedEvent;
+            _screener.PositionClosingSuccesEvent += ScreenerOnPositionClosingSuccesEvent;
 
             _regime = CreateParameter("Regime", "Off", new[] { "Off", "On", "OnlyLong", "OnlyShort", "OnlyClosePosition" });
             _maxPositions = CreateParameter("Max positions", 5, 1, 50, 1);
@@ -72,6 +79,8 @@ namespace OsEngine.Robots.IndexArbitrage
             _stopLossPercent = CreateParameter("Stop loss %", 0.5m, 0.05m, 5m, 0.05m);
             _takeProfitPercent = CreateParameter("Take profit %", 0.8m, 0.05m, 10m, 0.05m);
             _maxHoldMinutes = CreateParameter("Max hold minutes", 30, 1, 600, 5);
+            _monthlyProfitTargetPercent = CreateParameter("Monthly profit target %", 5m, 0m, 50m, 0.5m);
+            _monthlyLossLimitPercent = CreateParameter("Monthly loss limit %", 5m, 0m, 50m, 0.5m);
 
             _tradeStart = CreateParameterTimeOfDay("Trade start", 10, 0, 0, 0);
             _tradeEnd = CreateParameterTimeOfDay("Trade end", 18, 0, 0, 0);
@@ -134,6 +143,12 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
+            if (IsTradeBlockedByMonthlyLimits(_lastIndexTime))
+            {
+                CloseAllPositions("MonthlyLimit");
+                return;
+            }
+
             if (IsTradeTime(_lastIndexTime) == false)
             {
                 CloseAllPositions("TimeFilter");
@@ -146,6 +161,12 @@ namespace OsEngine.Robots.IndexArbitrage
             }
 
             if (_screener.Tabs == null || _screener.Tabs.Count == 0)
+            {
+                return;
+            }
+
+            int openPositions = GetOpenPositionsCount();
+            if (openPositions >= _maxPositions.ValueInt)
             {
                 return;
             }
@@ -213,15 +234,38 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
+            int slotsAvailable = _maxPositions.ValueInt - openPositions;
+            if (slotsAvailable <= 0)
+            {
+                return;
+            }
+
             List<SignalCandidate> best = candidates
                 .OrderByDescending(c => c.Score)
-                .Take(_maxPositions.ValueInt)
+                .Take(slotsAvailable)
                 .ToList();
 
             for (int i = 0; i < best.Count; i++)
             {
                 OpenPosition(best[i]);
             }
+        }
+
+        private int GetOpenPositionsCount()
+        {
+            int count = 0;
+
+            if (_screener.Tabs == null)
+            {
+                return count;
+            }
+
+            for (int i = 0; i < _screener.Tabs.Count; i++)
+            {
+                count += _screener.Tabs[i].PositionsOpenAll.Count;
+            }
+
+            return count;
         }
 
         private void EvaluateClose(BotTabSimple tab, List<Candle> candles)
@@ -244,6 +288,7 @@ namespace OsEngine.Robots.IndexArbitrage
             }
 
             DateTime lastTradeTime = candles[candles.Count - 1].TimeStart;
+            IsTradeBlockedByMonthlyLimits(lastTradeTime);
 
             for (int i = 0; i < positions.Count; i++)
             {
@@ -313,6 +358,11 @@ namespace OsEngine.Robots.IndexArbitrage
             }
 
             if (_regime.ValueString == "OnlyClosePosition")
+            {
+                return;
+            }
+
+            if (_monthlyStopTrading)
             {
                 return;
             }
@@ -454,6 +504,107 @@ namespace OsEngine.Robots.IndexArbitrage
         private void OnParametersChanged()
         {
             _deviationStatsBySecurity.Clear();
+            ResetMonthlyTracking(DateTime.MinValue);
+        }
+
+        private void ScreenerOnPositionClosingSuccesEvent(Position position, BotTabSimple tab)
+        {
+            if (position == null)
+            {
+                return;
+            }
+
+            DateTime closeTime = position.TimeClose;
+            if (closeTime == DateTime.MinValue)
+            {
+                closeTime = DateTime.Now;
+            }
+
+            EnsureMonthlyState(closeTime);
+
+            _monthClosedProfitAbs += position.ProfitPortfolioAbs;
+            UpdateMonthlyTradingState();
+        }
+
+        private void EnsureMonthlyState(DateTime now)
+        {
+            if (now == DateTime.MinValue)
+            {
+                return;
+            }
+
+            if (_monthAnchor == DateTime.MinValue ||
+                _monthAnchor.Year != now.Year ||
+                _monthAnchor.Month != now.Month)
+            {
+                ResetMonthlyTracking(now);
+            }
+
+            if (_monthStartPortfolioValue <= 0)
+            {
+                decimal portfolioValue = GetPortfolioValue();
+                if (portfolioValue > 0)
+                {
+                    _monthStartPortfolioValue = portfolioValue;
+                }
+            }
+        }
+
+        private void ResetMonthlyTracking(DateTime now)
+        {
+            _monthAnchor = now == DateTime.MinValue ? DateTime.MinValue : new DateTime(now.Year, now.Month, 1);
+            _monthStartPortfolioValue = 0;
+            _monthClosedProfitAbs = 0;
+            _monthlyStopTrading = false;
+        }
+
+        private void UpdateMonthlyTradingState()
+        {
+            if (_monthStartPortfolioValue <= 0)
+            {
+                return;
+            }
+
+            decimal monthlyProfitPercent = _monthClosedProfitAbs / _monthStartPortfolioValue * 100m;
+
+            if (_monthlyProfitTargetPercent.ValueDecimal > 0 &&
+                monthlyProfitPercent >= _monthlyProfitTargetPercent.ValueDecimal)
+            {
+                _monthlyStopTrading = true;
+            }
+
+            if (_monthlyLossLimitPercent.ValueDecimal > 0 &&
+                monthlyProfitPercent <= -_monthlyLossLimitPercent.ValueDecimal)
+            {
+                _monthlyStopTrading = true;
+            }
+        }
+
+        private bool IsTradeBlockedByMonthlyLimits(DateTime now)
+        {
+            EnsureMonthlyState(now);
+            UpdateMonthlyTradingState();
+
+            return _monthlyStopTrading;
+        }
+
+        private decimal GetPortfolioValue()
+        {
+            if (_screener.Tabs == null)
+            {
+                return 0;
+            }
+
+            for (int i = 0; i < _screener.Tabs.Count; i++)
+            {
+                Portfolio portfolio = _screener.Tabs[i].Portfolio;
+                if (portfolio != null && portfolio.ValueCurrent > 0)
+                {
+                    return portfolio.ValueCurrent;
+                }
+            }
+
+            return 0;
         }
 
         private bool IsTradeTime(DateTime time)
