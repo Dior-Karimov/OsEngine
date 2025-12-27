@@ -835,6 +835,12 @@ namespace OsEngine.Robots
                 sourcesList.Add(BotTabType.Index + " " + bot.TabsIndex.Count);
             }
 
+            if (bot.TabsCustomIndex != null &&
+                bot.TabsCustomIndex.Count > 0)
+            {
+                sourcesList.Add(BotTabType.CustomIndex + " " + bot.TabsCustomIndex.Count);
+            }
+
             if (bot.TabsCluster != null &&
                 bot.TabsCluster.Count > 0)
             {

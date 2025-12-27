@@ -1804,6 +1804,11 @@ namespace OsEngine.OsTrader
                     ((BotTabIndex)_activePanel.ActiveTab).ShowDialog();
                 }
                 else if (_activePanel.ActiveTab != null &&
+                    _activePanel.ActiveTab.GetType().Name == "BotTabCustomIndex")
+                {
+                    ((BotTabCustomIndex)_activePanel.ActiveTab).ShowDialog();
+                }
+                else if (_activePanel.ActiveTab != null &&
                          _activePanel.ActiveTab.GetType().Name == "BotTabCluster")
                 {
                     ((BotTabCluster)_activePanel.ActiveTab).ShowDialog();
