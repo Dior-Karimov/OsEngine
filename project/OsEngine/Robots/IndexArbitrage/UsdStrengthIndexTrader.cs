@@ -49,6 +49,9 @@ namespace OsEngine.Robots.IndexArbitrage
         private readonly StrategyParameterDecimal _volume;
         private readonly StrategyParameterString _tradeAssetInPortfolio;
         private readonly StrategyParameterDecimal _monthlyLossLimit;
+        private readonly StrategyParameterDecimal _maxTotalExposurePercent;
+        private readonly StrategyParameterDecimal _maxSpreadPercent;
+        private readonly StrategyParameterInt _minMinutesToSessionEnd;
 
         private readonly Dictionary<string, RollingStatistics> _deviationStatsBySecurity = new Dictionary<string, RollingStatistics>();
         private readonly Dictionary<string, DateTime> _lastStatsUpdateTimeBySymbol = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
@@ -91,6 +94,9 @@ namespace OsEngine.Robots.IndexArbitrage
             _volume = CreateParameter("Volume", 10m, 0.1m, 50m, 0.1m);
             _tradeAssetInPortfolio = CreateParameter("Asset in portfolio", "Prime");
             _monthlyLossLimit = CreateParameter("Monthly loss limit %", 0m, 0m, 100m, 0.1m);
+            _maxTotalExposurePercent = CreateParameter("Max total exposure %", 100m, 1m, 100m, 1m);
+            _maxSpreadPercent = CreateParameter("Max spread %", 0.01m, 0m, 1m, 0.001m);
+            _minMinutesToSessionEnd = CreateParameter("Min minutes to session end", 0, 0, 120, 1);
 
             ParametrsChangeByUser += OnParametersChanged;
 
@@ -188,6 +194,18 @@ namespace OsEngine.Robots.IndexArbitrage
                 }
 
                 if (lastTrade.TimeStart != lastIndex.TimeStart)
+                {
+                    continue;
+                }
+
+                if (IsTooCloseToSessionEnd(lastTrade.TimeStart))
+                {
+                    continue;
+                }
+
+                decimal spreadPenalty = GetSpreadPenalty(tab);
+
+                if (_maxSpreadPercent.ValueDecimal > 0m && spreadPenalty > _maxSpreadPercent.ValueDecimal)
                 {
                     continue;
                 }
@@ -397,10 +415,7 @@ namespace OsEngine.Robots.IndexArbitrage
         {
             decimal spreadPenalty = 0m;
 
-            if (tab.PriceBestAsk > 0)
-            {
-                spreadPenalty = (tab.PriceBestAsk - tab.PriceBestBid) / tab.PriceBestAsk;
-            }
+            spreadPenalty = GetSpreadPenalty(tab);
 
             decimal score = Math.Abs(zScore);
             score -= spreadPenalty * _scoreSpreadWeight.ValueDecimal;
@@ -699,7 +714,19 @@ namespace OsEngine.Robots.IndexArbitrage
                     return 0;
                 }
 
-                decimal moneyOnPosition = portfolioPrimeAsset / 100 * _volume.ValueDecimal;
+                decimal allowedExposurePercent = Math.Min(_volume.ValueDecimal, _maxTotalExposurePercent.ValueDecimal);
+                decimal totalCapMoney = portfolioPrimeAsset / 100 * allowedExposurePercent;
+                decimal currentExposure = GetCurrentExposureMoney();
+                decimal remainingExposure = totalCapMoney - currentExposure;
+
+                if (remainingExposure <= 0)
+                {
+                    return 0;
+                }
+
+                int openCount = GetOpenPositionsCount();
+                int remainingSlots = Math.Max(_maxPositions.ValueInt - openCount, 1);
+                decimal moneyOnPosition = remainingExposure / remainingSlots;
                 decimal contractPrice = tab.PriceBestAsk;
 
                 if (contractPrice == 0)
@@ -732,6 +759,108 @@ namespace OsEngine.Robots.IndexArbitrage
             }
 
             return volume;
+        }
+
+        private decimal GetSpreadPenalty(BotTabSimple tab)
+        {
+            if (tab == null || tab.PriceBestAsk <= 0)
+            {
+                return 0m;
+            }
+
+            return (tab.PriceBestAsk - tab.PriceBestBid) / tab.PriceBestAsk;
+        }
+
+        private bool IsTooCloseToSessionEnd(DateTime time)
+        {
+            if (_minMinutesToSessionEnd.ValueInt <= 0)
+            {
+                return false;
+            }
+
+            TimeSpan endTime = time.DayOfWeek == DayOfWeek.Friday ? _fridayEnd.TimeSpan : _tradeEnd.TimeSpan;
+            TimeSpan current = time.TimeOfDay;
+            double minutesToEnd = (endTime - current).TotalMinutes;
+
+            return minutesToEnd >= 0 && minutesToEnd < _minMinutesToSessionEnd.ValueInt;
+        }
+
+        private int GetOpenPositionsCount()
+        {
+            if (_screener.Tabs == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+
+            for (int i = 0; i < _screener.Tabs.Count; i++)
+            {
+                BotTabSimple tab = _screener.Tabs[i];
+                List<Position> positions = tab?.PositionsOpenAll;
+
+                if (positions == null)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < positions.Count; j++)
+                {
+                    if (positions[j].State == PositionStateType.Open)
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        private decimal GetCurrentExposureMoney()
+        {
+            if (_screener.Tabs == null)
+            {
+                return 0m;
+            }
+
+            decimal exposure = 0m;
+
+            for (int i = 0; i < _screener.Tabs.Count; i++)
+            {
+                BotTabSimple tab = _screener.Tabs[i];
+                List<Position> positions = tab?.PositionsOpenAll;
+
+                if (positions == null)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < positions.Count; j++)
+                {
+                    Position position = positions[j];
+
+                    if (position.State != PositionStateType.Open)
+                    {
+                        continue;
+                    }
+
+                    decimal price = position.Direction == Side.Buy ? tab.PriceBestBid : tab.PriceBestAsk;
+
+                    if (price <= 0)
+                    {
+                        price = position.EntryPrice;
+                    }
+
+                    if (price <= 0)
+                    {
+                        continue;
+                    }
+
+                    exposure += Math.Abs(position.OpenVolume) * price;
+                }
+            }
+
+            return exposure;
         }
 
         private class SignalCandidate
