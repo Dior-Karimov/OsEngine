@@ -31,7 +31,7 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.Calculator
                 return null;
             }
 
-            if (settings.UpdateMode == IndexUpdateMode.OnClosedCandle && FrameHasClosedCandles(frame) == false)
+            if (settings.UpdateMode == IndexUpdateMode.OnClosedCandle && FrameHasClosedCandles(frame, settings) == false)
             {
                 return null;
             }
@@ -186,17 +186,26 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.Calculator
             return IndexQuality.Degraded;
         }
 
-        private static bool FrameHasClosedCandles(IndexDataFrame frame)
+        private static bool FrameHasClosedCandles(IndexDataFrame frame, IndexSettings settings)
         {
+            if (frame == null || frame.Components == null)
+            {
+                return false;
+            }
+
+            int closedCount = 0;
+
             for (int i = 0; i < frame.Components.Count; i++)
             {
-                if (frame.Components[i].IsCandleClosed)
+                IndexComponentFrame componentFrame = frame.Components[i];
+
+                if (componentFrame.IsCandleClosed && componentFrame.Time == frame.Time)
                 {
-                    return true;
+                    closedCount++;
                 }
             }
 
-            return false;
+            return closedCount >= settings.MinActiveComponents;
         }
 
         private static bool IsStale(IndexComponentFrame componentFrame, IndexSettings settings, DateTime frameTime)

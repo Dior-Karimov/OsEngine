@@ -26,17 +26,27 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.DataFeed
             {
                 for (int i = 0; i < _connectors.Count; i++)
                 {
-                    _connectors[i].NewCandlesChangeEvent -= ConnectorOnNewCandlesChangeEvent;
+                    ConnectorCandles existingConnector = _connectors[i];
+                    if (_connectorHandlers.TryGetValue(existingConnector, out Action<List<Candle>> handler))
+                    {
+                        existingConnector.NewCandlesChangeEvent -= handler;
+                    }
                 }
             }
 
             _connectors = connectors;
+            _connectorHandlers.Clear();
+            _lastClosedCandles.Clear();
+            _lastEmittedTime = DateTime.MinValue;
 
             if (_connectors != null)
             {
                 for (int i = 0; i < _connectors.Count; i++)
                 {
-                    _connectors[i].NewCandlesChangeEvent += ConnectorOnNewCandlesChangeEvent;
+                    ConnectorCandles connector = _connectors[i];
+                    Action<List<Candle>> handler = candles => ConnectorOnNewCandlesChangeEvent(connector, candles);
+                    _connectorHandlers[connector] = handler;
+                    connector.NewCandlesChangeEvent += handler;
                 }
             }
         }
@@ -51,7 +61,7 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.DataFeed
             _isStarted = false;
         }
 
-        private void ConnectorOnNewCandlesChangeEvent(List<Candle> candles)
+        private void ConnectorOnNewCandlesChangeEvent(ConnectorCandles connector, List<Candle> candles)
         {
             if (_isStarted == false)
             {
@@ -63,24 +73,98 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.DataFeed
                 return;
             }
 
-            DateTime frameTime = candles[candles.Count - 1].TimeStart;
+            Candle closedCandle = GetLastClosedCandle(candles);
 
-            IndexDataFrame frame = new IndexDataFrame
+            if (closedCandle == null)
             {
-                Time = frameTime
+                return;
+            }
+
+            _lastClosedCandles[connector.UniqueName] = new ClosedCandleInfo
+            {
+                TimeStart = closedCandle.TimeStart,
+                Close = closedCandle.Close
             };
 
-            for (int i = 0; _connectors != null && i < _connectors.Count; i++)
+            if (TryBuildFrame(out IndexDataFrame frame) == false)
+            {
+                return;
+            }
+
+            DataFrameReadyEvent?.Invoke(frame);
+        }
+
+        private bool _isStarted;
+        private List<ConnectorCandles> _connectors;
+        private readonly Dictionary<ConnectorCandles, Action<List<Candle>>> _connectorHandlers =
+            new Dictionary<ConnectorCandles, Action<List<Candle>>>();
+        private readonly Dictionary<string, ClosedCandleInfo> _lastClosedCandles =
+            new Dictionary<string, ClosedCandleInfo>(StringComparer.OrdinalIgnoreCase);
+        private DateTime _lastEmittedTime = DateTime.MinValue;
+
+        private static Candle GetLastClosedCandle(List<Candle> candles)
+        {
+            for (int i = candles.Count - 1; i >= 0; i--)
+            {
+                Candle candle = candles[i];
+                if (candle.State == CandleState.Finished)
+                {
+                    return candle;
+                }
+            }
+
+            return null;
+        }
+
+        private bool TryBuildFrame(out IndexDataFrame frame)
+        {
+            frame = null;
+
+            if (_connectors == null || _connectors.Count == 0)
+            {
+                return false;
+            }
+
+            DateTime commonTime = DateTime.MaxValue;
+
+            for (int i = 0; i < _connectors.Count; i++)
             {
                 ConnectorCandles connector = _connectors[i];
-                List<Candle> connectorCandles = connector.Candles(true);
 
-                if (connectorCandles == null || connectorCandles.Count == 0)
+                if (_lastClosedCandles.TryGetValue(connector.UniqueName, out ClosedCandleInfo info) == false)
                 {
-                    continue;
+                    return false;
                 }
 
-                Candle lastCandle = connectorCandles[connectorCandles.Count - 1];
+                if (info.TimeStart < commonTime)
+                {
+                    commonTime = info.TimeStart;
+                }
+            }
+
+            if (commonTime <= _lastEmittedTime)
+            {
+                return false;
+            }
+
+            IndexDataFrame newFrame = new IndexDataFrame
+            {
+                Time = commonTime
+            };
+
+            for (int i = 0; i < _connectors.Count; i++)
+            {
+                ConnectorCandles connector = _connectors[i];
+
+                if (_lastClosedCandles.TryGetValue(connector.UniqueName, out ClosedCandleInfo info) == false)
+                {
+                    return false;
+                }
+
+                if (info.TimeStart != commonTime)
+                {
+                    return false;
+                }
 
                 string securityName = connector.SecurityName;
                 if (string.IsNullOrEmpty(securityName))
@@ -92,19 +176,24 @@ namespace OsEngine.OsTrader.Panels.Tab.IndexEngine.DataFeed
                 {
                     UniqueName = connector.UniqueName,
                     SecurityName = securityName,
-                    Price = lastCandle.Close,
-                    Time = lastCandle.TimeStart,
+                    Price = info.Close,
+                    Time = commonTime,
                     TimeFrameTimeSpan = connector.TimeFrameTimeSpan,
-                    IsCandleClosed = lastCandle.State == CandleState.Finished
+                    IsCandleClosed = true
                 };
 
-                frame.Components.Add(componentFrame);
+                newFrame.Components.Add(componentFrame);
             }
 
-            DataFrameReadyEvent?.Invoke(frame);
+            _lastEmittedTime = commonTime;
+            frame = newFrame;
+            return true;
         }
 
-        private bool _isStarted;
-        private List<ConnectorCandles> _connectors;
+        private struct ClosedCandleInfo
+        {
+            public DateTime TimeStart;
+            public decimal Close;
+        }
     }
 }
