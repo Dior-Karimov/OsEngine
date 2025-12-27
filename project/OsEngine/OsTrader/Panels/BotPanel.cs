@@ -42,6 +42,11 @@ namespace OsEngine.OsTrader.Panels
         Index,
 
         /// <summary>
+        /// source for custom index creation
+        /// </summary>
+        CustomIndex,
+
+        /// <summary>
         /// source for creating and displaying a cluster chart
         /// </summary>
         Cluster,
@@ -363,6 +368,14 @@ namespace OsEngine.OsTrader.Panels
                 for (int i = 0; TabsIndex != null && i < TabsIndex.Count; i++)
                 {
                     if (TabsIndex[i].IsConnected == false)
+                    {
+                        return false;
+                    }
+                }
+
+                for (int i = 0; TabsCustomIndex != null && i < TabsCustomIndex.Count; i++)
+                {
+                    if (TabsCustomIndex[i].IsConnected == false)
                     {
                         return false;
                     }
@@ -1732,6 +1745,19 @@ position => position.State != PositionStateType.OpeningFail
         }
 
         /// <summary>
+        /// custom index tabs
+        /// </summary>
+        public List<BotTabCustomIndex> TabsCustomIndex
+        {
+            get
+            {
+                return _botTabs != null
+                    ? _botTabs.OfType<BotTabCustomIndex>().ToList()
+                    : new();
+            }
+        }
+
+        /// <summary>
         /// clustered tabs
         /// </summary>
         public List<BotTabCluster> TabsCluster
@@ -1912,6 +1938,10 @@ position => position.State != PositionStateType.OpeningFail
                 else if (tabType == BotTabType.Index)
                 {
                     newTab = new BotTabIndex(nameTab, StartProgram);
+                }
+                else if (tabType == BotTabType.CustomIndex)
+                {
+                    newTab = new BotTabCustomIndex(nameTab, StartProgram);
                 }
                 else if (tabType == BotTabType.Cluster)
                 {
@@ -2154,6 +2184,10 @@ position => position.State != PositionStateType.OpeningFail
                     if (ActiveTab.TabType == BotTabType.Index)
                     {
                         ((BotTabIndex)ActiveTab).StartPaint(_gridChart, _hostChart, _rectangle);
+                    }
+                    else if (ActiveTab.TabType == BotTabType.CustomIndex)
+                    {
+                        ((BotTabCustomIndex)ActiveTab).StartPaint(_gridChart, _hostChart, _rectangle);
                     }
                     else if (ActiveTab.TabType == BotTabType.Cluster)
                     {
@@ -2427,6 +2461,7 @@ position => position.State != PositionStateType.OpeningFail
                 {
 
                     if (_botTabs[i].TabType == BotTabType.Index
+                        || _botTabs[i].TabType == BotTabType.CustomIndex
                         || _botTabs[i].TabType == BotTabType.Cluster)
                     {
                         continue;
