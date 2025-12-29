@@ -1240,7 +1240,6 @@ namespace OsEngine.OsTrader.Panels.Tab
                 Candle indexCandle = new Candle
                 {
                     TimeStart = curTime,
-                    State = CandleStateType.Finished,
                     Open = lastIndexValue,
                     Close = nextIndexValue,
                     High = Math.Max(lastIndexValue, nextIndexValue),
