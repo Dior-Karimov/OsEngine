@@ -48,10 +48,12 @@ namespace OsEngine.Robots.IndexArbitrage
         private StrategyParameterDecimal _partialClosePercent;
         private StrategyParameterDecimal _stopLossPercent;
         private StrategyParameterDecimal _trailingStopPercent;
+        private StrategyParameterInt _closeRetrySeconds;
 
         private readonly Dictionary<int, decimal> _maxFavorablePrice = new Dictionary<int, decimal>();
         private readonly Dictionary<int, decimal> _minFavorablePrice = new Dictionary<int, decimal>();
         private readonly HashSet<int> _tp1Done = new HashSet<int>();
+        private readonly Dictionary<int, DateTime> _lastCloseAttemptTime = new Dictionary<int, DateTime>();
 
         public UsdStrengthAdaptiveScalper(string name, StartProgram startProgram)
             : base(name, startProgram)
@@ -85,6 +87,7 @@ namespace OsEngine.Robots.IndexArbitrage
             _partialClosePercent = CreateParameter("Partial close %", 50m, 10m, 90m, 5m);
             _stopLossPercent = CreateParameter("Stop loss %", 0.6m, 0.1m, 5, 0.1m);
             _trailingStopPercent = CreateParameter("Trailing stop %", 0.4m, 0.1m, 5, 0.1m);
+            _closeRetrySeconds = CreateParameter("Close retry seconds", 10, 1, 120, 1);
 
             Description = OsLocalization.Description.DescriptionLabel47;
         }
@@ -469,6 +472,7 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
+            RegisterCloseAttempt(pos, tab);
             tab.CloseAtMarket(pos, volume);
         }
 
@@ -484,6 +488,16 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
+            if (ShouldRetryClose(tab, pos) == false)
+            {
+                return;
+            }
+
+            if (pos.CloseActive)
+            {
+                tab.CloseAllOrderToPosition(pos);
+            }
+
             if (pos.CloseActive)
             {
                 return;
@@ -495,7 +509,42 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
+            RegisterCloseAttempt(pos, tab);
             tab.CloseAtMarket(pos, pos.OpenVolume);
+        }
+
+        private bool ShouldRetryClose(BotTabSimple tab, Position pos)
+        {
+            if (pos == null)
+            {
+                return false;
+            }
+
+            DateTime nowTime = tab.MarketTime;
+
+            if (nowTime == DateTime.MinValue)
+            {
+                nowTime = DateTime.Now;
+            }
+
+            if (_lastCloseAttemptTime.TryGetValue(pos.Number, out DateTime lastAttempt))
+            {
+                return (nowTime - lastAttempt).TotalSeconds >= _closeRetrySeconds.ValueInt;
+            }
+
+            return true;
+        }
+
+        private void RegisterCloseAttempt(Position pos, BotTabSimple tab)
+        {
+            DateTime nowTime = tab.MarketTime;
+
+            if (nowTime == DateTime.MinValue)
+            {
+                nowTime = DateTime.Now;
+            }
+
+            _lastCloseAttemptTime[pos.Number] = nowTime;
         }
 
         private void CleanupPosition(Position pos)
@@ -508,6 +557,7 @@ namespace OsEngine.Robots.IndexArbitrage
             _tp1Done.Remove(pos.Number);
             _maxFavorablePrice.Remove(pos.Number);
             _minFavorablePrice.Remove(pos.Number);
+            _lastCloseAttemptTime.Remove(pos.Number);
         }
 
         private decimal GetVolume(BotTabSimple tab)
