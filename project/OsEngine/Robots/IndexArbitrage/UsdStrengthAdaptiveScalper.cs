@@ -279,7 +279,7 @@ namespace OsEngine.Robots.IndexArbitrage
                     continue;
                 }
 
-                if (pos.State == PositionStateType.Closing)
+                if (pos.State == PositionStateType.Closing || pos.CloseActive)
                 {
                     EnsureClose(tab, pos);
                     continue;
@@ -483,7 +483,7 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
-            if (pos.State != PositionStateType.Closing)
+            if (pos.State != PositionStateType.Closing && pos.CloseActive == false)
             {
                 return;
             }
