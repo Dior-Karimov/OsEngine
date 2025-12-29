@@ -2446,5 +2446,9 @@ namespace OsEngine.Language
         public string Label636 => OsLocalization.ConvertToLocString(
          "Eng:Single activation mode_" +
          "Ru:Режим одиночной активации_");
+
+        public string Label637 => OsLocalization.ConvertToLocString(
+         "Eng:USD direction_" +
+         "Ru:Направление USD_");
     }
 }

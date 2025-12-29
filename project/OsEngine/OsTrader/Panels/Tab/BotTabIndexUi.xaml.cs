@@ -77,6 +77,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             ComboBoxIndexMultType.Items.Add(IndexMultType.VolumeWeighted.ToString());
             ComboBoxIndexMultType.Items.Add(IndexMultType.EqualWeighted.ToString());
             ComboBoxIndexMultType.Items.Add(IndexMultType.Cointegration.ToString());
+            ComboBoxIndexMultType.Items.Add(IndexMultType.UsdStrength.ToString());
             ComboBoxIndexMultType.SelectedItem = autoFormulaBuilder.IndexMultType.ToString();
             ComboBoxIndexMultType.SelectionChanged += ComboBoxIndexMultType_SelectionChanged;
 
@@ -164,6 +165,8 @@ namespace OsEngine.OsTrader.Panels.Tab
                     _sourcesGrid.CellClick -= _sourcesGrid_CellClick;
                     _sourcesGrid.CellDoubleClick -= Grid1CellValueChangeClick;
                     _sourcesGrid.DataError -= _sourcesGrid_DataError;
+                    _sourcesGrid.CellValueChanged -= _sourcesGrid_CellValueChanged;
+                    _sourcesGrid.CurrentCellDirtyStateChanged -= _sourcesGrid_CurrentCellDirtyStateChanged;
                     DataGridFactory.ClearLinks(_sourcesGrid);
                     _sourcesGrid.Rows.Clear();
                     _sourcesGrid = null;
@@ -352,6 +355,16 @@ namespace OsEngine.OsTrader.Panels.Tab
         private BotTabIndex _spread;
 
         private DataGridView _sourcesGrid;
+        private bool _isUpdatingSourcesGrid;
+
+        private const int ColumnIndexNumber = 0;
+        private const int ColumnIndexSecurity = 1;
+        private const int ColumnIndexServer = 2;
+        private const int ColumnIndexTimeFrame = 3;
+        private const int ColumnIndexUsdDirection = 4;
+        private const int ColumnIndexLastPrice = 5;
+        private const int ColumnIndexConnector = 6;
+        private const int ColumnIndexDelete = 7;
 
         private void CreateTable()
         {
@@ -363,6 +376,8 @@ namespace OsEngine.OsTrader.Panels.Tab
             _sourcesGrid.CellDoubleClick += Grid1CellValueChangeClick;
             _sourcesGrid.CellClick += _sourcesGrid_CellClick;
             _sourcesGrid.DataError += _sourcesGrid_DataError;
+            _sourcesGrid.CellValueChanged += _sourcesGrid_CellValueChanged;
+            _sourcesGrid.CurrentCellDirtyStateChanged += _sourcesGrid_CurrentCellDirtyStateChanged;
 
             DataGridViewTextBoxCell fcell0 = new DataGridViewTextBoxCell();
 
@@ -396,25 +411,32 @@ namespace OsEngine.OsTrader.Panels.Tab
             _sourcesGrid.Columns.Add(fcolumn3);
 
             DataGridViewColumn fcolumn4 = new DataGridViewColumn();
-            fcolumn4.CellTemplate = fcell0;
-            fcolumn4.HeaderText = OsLocalization.Trader.Label398; // Last price
-            fcolumn4.ReadOnly = true;
+            fcolumn4.CellTemplate = new DataGridViewComboBoxCell();
+            fcolumn4.HeaderText = OsLocalization.Trader.Label637; // USD direction
+            fcolumn4.ReadOnly = false;
             fcolumn4.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             _sourcesGrid.Columns.Add(fcolumn4);
 
             DataGridViewColumn fcolumn5 = new DataGridViewColumn();
             fcolumn5.CellTemplate = fcell0;
-            fcolumn5.HeaderText = "";                             // Set security
+            fcolumn5.HeaderText = OsLocalization.Trader.Label398; // Last price
             fcolumn5.ReadOnly = true;
-            fcolumn5.Width = 150;
+            fcolumn5.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             _sourcesGrid.Columns.Add(fcolumn5);
 
             DataGridViewColumn fcolumn6 = new DataGridViewColumn();
             fcolumn6.CellTemplate = fcell0;
-            fcolumn6.HeaderText = "";                             // Delete
+            fcolumn6.HeaderText = "";                             // Set security
             fcolumn6.ReadOnly = true;
-            fcolumn6.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            fcolumn6.Width = 150;
             _sourcesGrid.Columns.Add(fcolumn6);
+
+            DataGridViewColumn fcolumn7 = new DataGridViewColumn();
+            fcolumn7.CellTemplate = fcell0;
+            fcolumn7.HeaderText = "";                             // Delete
+            fcolumn7.ReadOnly = true;
+            fcolumn7.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            _sourcesGrid.Columns.Add(fcolumn7);
 
             HostSecurity1.Child = _sourcesGrid;
         }
@@ -423,6 +445,54 @@ namespace OsEngine.OsTrader.Panels.Tab
         {
             CustomMessageBoxUi ui = new CustomMessageBoxUi(e.ToString());
             ui.ShowDialog();
+        }
+
+        private void _sourcesGrid_CurrentCellDirtyStateChanged(object sender, EventArgs e)
+        {
+            if (_sourcesGrid.IsCurrentCellDirty)
+            {
+                _sourcesGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        }
+
+        private void _sourcesGrid_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (_isUpdatingSourcesGrid)
+            {
+                return;
+            }
+
+            if (e.RowIndex < 0 || e.ColumnIndex != ColumnIndexUsdDirection)
+            {
+                return;
+            }
+
+            if (e.RowIndex >= _spread.Tabs.Count)
+            {
+                return;
+            }
+
+            string securityName = _spread.Tabs[e.RowIndex].SecurityName;
+
+            if (string.IsNullOrWhiteSpace(securityName))
+            {
+                return;
+            }
+
+            object cellValue = _sourcesGrid.Rows[e.RowIndex].Cells[ColumnIndexUsdDirection].Value;
+
+            if (cellValue == null)
+            {
+                return;
+            }
+
+            if (int.TryParse(cellValue.ToString(), out int direction) == false)
+            {
+                return;
+            }
+
+            _spread.SetUsdDirection(securityName, direction);
+            IndexOrSourcesChanged = true;
         }
 
         private void Grid1CellValueChangeClick(object sender, DataGridViewCellEventArgs e)
@@ -445,14 +515,14 @@ namespace OsEngine.OsTrader.Panels.Tab
         {
             try
             {
-                if (e.ColumnIndex == 5)
+                if (e.ColumnIndex == ColumnIndexConnector)
                 { // connection dialog
                     int index = _sourcesGrid.CurrentCell.RowIndex;
                     _spread.ShowIndexConnectorIndexDialog(index);
                     ReloadSecurityTable();
                     IndexOrSourcesChanged = true;
                 }
-                else if (e.ColumnIndex == 6)
+                else if (e.ColumnIndex == ColumnIndexDelete)
                 { // delete
                     if (string.IsNullOrEmpty(_spread.UserFormula) == false)
                     {
@@ -506,32 +576,40 @@ namespace OsEngine.OsTrader.Panels.Tab
 
                 List<Security> secInIndex = _spread.SecuritiesInIndex;
 
+                _isUpdatingSourcesGrid = true;
+
                 for (int i = 0; _spread.Tabs != null && i < _spread.Tabs.Count; i++)
                 {
                     DataGridViewRow row = new DataGridViewRow();
 
                     row.Cells.Add((new DataGridViewTextBoxCell()));
-                    row.Cells[0].Value = "A" + i;
+                    row.Cells[ColumnIndexNumber].Value = "A" + i;
 
                     row.Cells.Add(new DataGridViewTextBoxCell());
                     if (string.IsNullOrWhiteSpace(_spread.Tabs[i].SecurityName))
                     {
-                        row.Cells[1].Value = OsLocalization.Trader.Label84;
+                        row.Cells[ColumnIndexSecurity].Value = OsLocalization.Trader.Label84;
 
                     }
                     else
                     {
-                        row.Cells[1].Value = _spread.Tabs[i].SecurityName;
+                        row.Cells[ColumnIndexSecurity].Value = _spread.Tabs[i].SecurityName;
                     }
 
                     row.Cells.Add((new DataGridViewTextBoxCell()));
-                    row.Cells[2].Value = _spread.Tabs[i].ServerFullName;
+                    row.Cells[ColumnIndexServer].Value = _spread.Tabs[i].ServerFullName;
 
                     row.Cells.Add((new DataGridViewTextBoxCell()));
-                    row.Cells[3].Value = _spread.Tabs[i].TimeFrame.ToString();
+                    row.Cells[ColumnIndexTimeFrame].Value = _spread.Tabs[i].TimeFrame.ToString();
+
+                    DataGridViewComboBoxCell usdDirectionCell = new DataGridViewComboBoxCell();
+                    usdDirectionCell.Items.Add("1");
+                    usdDirectionCell.Items.Add("-1");
+                    usdDirectionCell.Value = _spread.GetUsdDirection(_spread.Tabs[i].SecurityName).ToString();
+                    row.Cells.Add(usdDirectionCell);
 
                     row.Cells.Add((new DataGridViewTextBoxCell())); // LastPrice
-                                                                    // row.Cells[4].Value = _spread.Tabs[i].TimeFrame.ToString();
+                                                                    // row.Cells[ColumnIndexLastPrice].Value = _spread.Tabs[i].TimeFrame.ToString();
 
                     DataGridViewButtonCell button = new DataGridViewButtonCell();
                     button.Value = OsLocalization.Trader.Label235;
@@ -574,7 +652,6 @@ namespace OsEngine.OsTrader.Panels.Tab
                     _sourcesGrid.Rows.Add(row);
                 }
 
-
                 if (showRow > 0 &&
                     showRow < _sourcesGrid.Rows.Count)
                 {
@@ -590,6 +667,10 @@ namespace OsEngine.OsTrader.Panels.Tab
             catch(Exception ex) 
             {
                 ServerMaster.SendNewLogMessage(ex.ToString(),Logging.LogMessageType.Error);
+            }
+            finally
+            {
+                _isUpdatingSourcesGrid = false;
             }
         }
 
@@ -725,7 +806,7 @@ namespace OsEngine.OsTrader.Panels.Tab
                         continue;
                     }
 
-                    DataGridViewCell priceCell = row.Cells[4];
+                    DataGridViewCell priceCell = row.Cells[ColumnIndexLastPrice];
 
                     if (priceCell == null)
                     {

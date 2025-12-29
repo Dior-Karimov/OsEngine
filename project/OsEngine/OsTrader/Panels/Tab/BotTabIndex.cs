@@ -37,6 +37,7 @@ namespace OsEngine.OsTrader.Panels.Tab
             _chartMaster = new ChartCandleMaster(TabName, _startProgram);
 
             Load();
+            LoadUsdDirections();
 
             AutoFormulaBuilder = new IndexFormulaBuilder(this, TabName, _startProgram);
             AutoFormulaBuilder.LogMessageEvent += SendNewLogMessage;
@@ -113,6 +114,11 @@ namespace OsEngine.OsTrader.Panels.Tab
             if (File.Exists(@"Engine\" + TabName + @"SpreadSet.txt"))
             {
                 File.Delete(@"Engine\" + TabName + @"SpreadSet.txt");
+            }
+
+            if (File.Exists(@"Engine\" + TabName + @"UsdDirections.txt"))
+            {
+                File.Delete(@"Engine\" + TabName + @"UsdDirections.txt");
             }
 
             for (int i = 0; Tabs != null && i < Tabs.Count; i++)
@@ -573,11 +579,14 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 return;
             }
+
+            string securityName = Tabs[index].SecurityName;
             Tabs[index].NewCandlesChangeEvent -= BotTabIndex_NewCandlesChangeEvent;
             Tabs[index].LogMessageEvent -= SendNewLogMessage;
             Tabs[index].Delete();
             Tabs.RemoveAt(index);
 
+            RemoveUsdDirection(securityName);
             Save();
         }
 
@@ -608,6 +617,8 @@ namespace OsEngine.OsTrader.Panels.Tab
                     writer.WriteLine(PercentNormalization);
                     writer.Close();
                 }
+
+                SaveUsdDirections();
             }
             catch (Exception)
             {
@@ -717,6 +728,124 @@ namespace OsEngine.OsTrader.Panels.Tab
         private string _userFormula;
 
         public List<Security> SecuritiesInIndex = new List<Security>();
+
+        public int GetUsdDirection(string securityName)
+        {
+            if (string.IsNullOrWhiteSpace(securityName))
+            {
+                return 1;
+            }
+
+            if (_usdDirectionsBySecurity.TryGetValue(securityName, out int direction))
+            {
+                return direction;
+            }
+
+            return 1;
+        }
+
+        public void SetUsdDirection(string securityName, int direction)
+        {
+            if (string.IsNullOrWhiteSpace(securityName))
+            {
+                return;
+            }
+
+            if (direction != 1 && direction != -1)
+            {
+                return;
+            }
+
+            _usdDirectionsBySecurity[securityName] = direction;
+            SaveUsdDirections();
+        }
+
+        public void RemoveUsdDirection(string securityName)
+        {
+            if (string.IsNullOrWhiteSpace(securityName))
+            {
+                return;
+            }
+
+            if (_usdDirectionsBySecurity.Remove(securityName))
+            {
+                SaveUsdDirections();
+            }
+        }
+
+        private void LoadUsdDirections()
+        {
+            _usdDirectionsBySecurity.Clear();
+
+            string path = @"Engine\" + TabName + @"UsdDirections.txt";
+
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                using (StreamReader reader = new StreamReader(path))
+                {
+                    while (reader.EndOfStream == false)
+                    {
+                        string line = reader.ReadLine();
+
+                        if (string.IsNullOrWhiteSpace(line))
+                        {
+                            continue;
+                        }
+
+                        string[] parts = line.Split('#');
+
+                        if (parts.Length != 2)
+                        {
+                            continue;
+                        }
+
+                        if (int.TryParse(parts[1], out int direction) == false)
+                        {
+                            continue;
+                        }
+
+                        if (direction != 1 && direction != -1)
+                        {
+                            continue;
+                        }
+
+                        _usdDirectionsBySecurity[parts[0]] = direction;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // ignore
+            }
+        }
+
+        private void SaveUsdDirections()
+        {
+            try
+            {
+                string path = @"Engine\" + TabName + @"UsdDirections.txt";
+
+                using (StreamWriter writer = new StreamWriter(path, false))
+                {
+                    foreach (KeyValuePair<string, int> pair in _usdDirectionsBySecurity)
+                    {
+                        writer.WriteLine(pair.Key + "#" + pair.Value);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // ignore
+            }
+        }
+
+        private readonly Dictionary<string, int> _usdDirectionsBySecurity =
+            new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
 
         private void TryAddTradeSecurity(Security sec)
         {
@@ -832,6 +961,30 @@ namespace OsEngine.OsTrader.Panels.Tab
                 return;
             }
 
+            if (UseUsdStrengthIndex)
+            {
+                Candles = BuildUsdStrengthCandles();
+
+                if (Candles != null)
+                {
+                    _chartMaster.SetCandles(Candles);
+                }
+
+                if (SpreadChangeEvent != null && EventsIsOn == true)
+                {
+                    try
+                    {
+                        SpreadChangeEvent(Candles);
+                    }
+                    catch (Exception ex)
+                    {
+                        SendNewLogMessage(ex.ToString(), LogMessageType.Error);
+                    }
+                }
+
+                return;
+            }
+
             ConvertedFormula = ConvertFormula(_userFormula);
 
             SecuritiesInIndex.Clear();
@@ -927,6 +1080,23 @@ namespace OsEngine.OsTrader.Panels.Tab
                 _normalizeCandles.Clear();
             }
 
+            if (UseUsdStrengthIndex)
+            {
+                Candles = BuildUsdStrengthCandles();
+
+                if (Candles != null)
+                {
+                    _chartMaster.SetCandles(Candles);
+                }
+
+                if (SpreadChangeEvent != null && EventsIsOn == true)
+                {
+                    SpreadChangeEvent(Candles);
+                }
+
+                return;
+            }
+
             // loop to collect all the candles in one array
 
             if (string.IsNullOrWhiteSpace(ConvertedFormula))
@@ -970,6 +1140,120 @@ namespace OsEngine.OsTrader.Panels.Tab
         private int _iteration = 0;
 
         DateTime _lastRecalculateTime = DateTime.MinValue;
+
+        private bool UseUsdStrengthIndex
+        {
+            get
+            {
+                if (AutoFormulaBuilder == null)
+                {
+                    return false;
+                }
+
+                return AutoFormulaBuilder.IndexMultType == IndexMultType.UsdStrength;
+            }
+        }
+
+        private List<Candle> BuildUsdStrengthCandles()
+        {
+            if (Tabs == null || Tabs.Count == 0)
+            {
+                return null;
+            }
+
+            List<Candle> baseCandles = Tabs[0].Candles(true);
+
+            if (baseCandles == null || baseCandles.Count < 2)
+            {
+                return null;
+            }
+
+            List<Dictionary<DateTime, Candle>> candleMaps = new List<Dictionary<DateTime, Candle>>();
+            List<int> directions = new List<int>();
+
+            for (int i = 0; i < Tabs.Count; i++)
+            {
+                List<Candle> candles = Tabs[i].Candles(true);
+
+                if (candles == null || candles.Count < 2)
+                {
+                    return null;
+                }
+
+                Dictionary<DateTime, Candle> map = new Dictionary<DateTime, Candle>();
+
+                for (int j = 0; j < candles.Count; j++)
+                {
+                    if (map.ContainsKey(candles[j].TimeStart) == false)
+                    {
+                        map.Add(candles[j].TimeStart, candles[j]);
+                    }
+                }
+
+                candleMaps.Add(map);
+                directions.Add(GetUsdDirection(Tabs[i].SecurityName));
+
+                if (Tabs[i].Security != null)
+                {
+                    TryAddTradeSecurity(Tabs[i].Security);
+                }
+            }
+
+            List<Candle> result = new List<Candle>();
+            decimal lastIndexValue = 100m;
+
+            for (int i = 1; i < baseCandles.Count; i++)
+            {
+                DateTime curTime = baseCandles[i].TimeStart;
+                DateTime prevTime = baseCandles[i - 1].TimeStart;
+
+                bool isValid = true;
+                decimal sumReturn = 0m;
+
+                for (int j = 0; j < candleMaps.Count; j++)
+                {
+                    if (candleMaps[j].TryGetValue(curTime, out Candle curCandle) == false
+                        || candleMaps[j].TryGetValue(prevTime, out Candle prevCandle) == false)
+                    {
+                        isValid = false;
+                        break;
+                    }
+
+                    if (curCandle.Close <= 0 || prevCandle.Close <= 0)
+                    {
+                        isValid = false;
+                        break;
+                    }
+
+                    double logReturn = Math.Log((double)(curCandle.Close / prevCandle.Close));
+                    sumReturn += directions[j] * (decimal)logReturn;
+                }
+
+                if (isValid == false)
+                {
+                    continue;
+                }
+
+                decimal averageReturn = sumReturn / candleMaps.Count;
+                decimal nextIndexValue = lastIndexValue * (decimal)Math.Exp((double)averageReturn);
+
+                Candle indexCandle = new Candle
+                {
+                    TimeStart = curTime,
+                    State = CandleStateType.Finished,
+                    Open = lastIndexValue,
+                    Close = nextIndexValue,
+                    High = Math.Max(lastIndexValue, nextIndexValue),
+                    Low = Math.Min(lastIndexValue, nextIndexValue),
+                    Volume = 0
+                };
+
+                result.Add(indexCandle);
+                lastIndexValue = nextIndexValue;
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// recalculate values to index. Recursive function that parses the formula and calculates the index.
@@ -2656,6 +2940,10 @@ namespace OsEngine.OsTrader.Panels.Tab
             {
                 SetFormulaCointegrationWeighted(secInIndex, _daysLookBackInBuilding);
             }
+            else if (_indexMultType == IndexMultType.UsdStrength)
+            {
+                SetFormulaUsdStrength(secInIndex);
+            }
 
             _lastTimeUpdate = timeCandle;
 
@@ -2677,6 +2965,11 @@ namespace OsEngine.OsTrader.Panels.Tab
             }
 
             return true;
+        }
+
+        private void SetFormulaUsdStrength(List<SecurityInIndex> secInIndex)
+        {
+            _index.UserFormula = "UsdStrength";
         }
 
         private void SetFormulaPriceWeighted(List<SecurityInIndex> secInIndex, int daysLookBack)
@@ -3239,7 +3532,9 @@ namespace OsEngine.OsTrader.Panels.Tab
 
         EqualWeighted,
 
-        Cointegration
+        Cointegration,
+
+        UsdStrength
     }
 
     /// <summary>
