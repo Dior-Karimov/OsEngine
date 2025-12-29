@@ -288,11 +288,6 @@ namespace OsEngine.Robots.IndexArbitrage
 
         private void ManagePosition(BotTabSimple tab, Position pos, List<Candle> candlesSecurity)
         {
-            if (pos.CloseActive)
-            {
-                return;
-            }
-
             decimal currentPrice = pos.Direction == Side.Buy ? tab.PriceBestBid : tab.PriceBestAsk;
 
             if (currentPrice == 0 || pos.EntryPrice == 0)
@@ -468,23 +463,7 @@ namespace OsEngine.Robots.IndexArbitrage
                 return;
             }
 
-            decimal price = pos.Direction == Side.Buy ? tab.PriceBestBid : tab.PriceBestAsk;
-
-            if (_slippagePercent.ValueDecimal != 0)
-            {
-                if (pos.Direction == Side.Buy)
-                {
-                    price = price - price * (_slippagePercent.ValueDecimal / 100);
-                }
-                else
-                {
-                    price = price + price * (_slippagePercent.ValueDecimal / 100);
-                }
-
-                price = Math.Round(price, tab.Security.Decimals);
-            }
-
-            tab.CloseAtLimit(pos, price, volume);
+            tab.CloseAtMarket(pos, volume);
         }
 
         private void CleanupPosition(Position pos)
