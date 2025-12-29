@@ -520,7 +520,7 @@ namespace OsEngine.Robots.IndexArbitrage
                 return false;
             }
 
-            DateTime nowTime = tab.MarketTime;
+            DateTime nowTime = tab.TimeServerCurrent;
 
             if (nowTime == DateTime.MinValue)
             {
@@ -537,7 +537,7 @@ namespace OsEngine.Robots.IndexArbitrage
 
         private void RegisterCloseAttempt(Position pos, BotTabSimple tab)
         {
-            DateTime nowTime = tab.MarketTime;
+            DateTime nowTime = tab.TimeServerCurrent;
 
             if (nowTime == DateTime.MinValue)
             {
