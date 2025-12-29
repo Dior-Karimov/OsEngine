@@ -276,6 +276,12 @@ namespace OsEngine.Robots.IndexArbitrage
                     continue;
                 }
 
+                if (pos.State == PositionStateType.Closing)
+                {
+                    EnsureClose(tab, pos);
+                    continue;
+                }
+
                 if (pos.State != PositionStateType.Open)
                 {
                     CleanupPosition(pos);
@@ -464,6 +470,32 @@ namespace OsEngine.Robots.IndexArbitrage
             }
 
             tab.CloseAtMarket(pos, volume);
+        }
+
+        private void EnsureClose(BotTabSimple tab, Position pos)
+        {
+            if (pos == null)
+            {
+                return;
+            }
+
+            if (pos.State != PositionStateType.Closing)
+            {
+                return;
+            }
+
+            if (pos.CloseActive)
+            {
+                return;
+            }
+
+            if (pos.OpenVolume <= 0)
+            {
+                CleanupPosition(pos);
+                return;
+            }
+
+            tab.CloseAtMarket(pos, pos.OpenVolume);
         }
 
         private void CleanupPosition(Position pos)
